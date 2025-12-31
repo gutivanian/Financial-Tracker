@@ -1,11 +1,10 @@
 import { Pool } from 'pg';
-import fs from 'fs';
 
 // Database configuration
-const sslConfig = process.env.DB_SSL === 'true' && process.env.DB_CA_PATH
+const sslConfig = process.env.DB_SSL === 'true' && process.env.DB_CA_CERT
   ? {
       rejectUnauthorized: true,
-      ca: fs.readFileSync(process.env.DB_CA_PATH).toString(),
+      ca: process.env.DB_CA_CERT,
     }
   : false;
 
