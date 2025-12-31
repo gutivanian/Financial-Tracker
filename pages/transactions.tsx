@@ -1,0 +1,646 @@
+// pftu\pages\transactions.tsx
+import React, { useEffect, useState } from 'react';
+import Layout from '@/components/Layout';
+import Modal from '@/components/Modal';
+import { Plus, Filter, Download, Search, ArrowUpRight, ArrowDownRight, Edit2, Trash2 } from 'lucide-react';
+import { formatCurrency, formatDate } from '@/lib/utils';
+import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
+
+export default function Transactions() {
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any>({ income: [], expense: [], all: [] });
+  const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<any>(null);
+  const [filter, setFilter] = useState({
+    type: '',
+    start_date: '',
+    end_date: '',
+    search: '',
+  });
+  const [formData, setFormData] = useState({
+    account_id: '',
+    category_id: '',
+    type: 'expense',
+    amount: '',
+    date: new Date().toISOString().split('T')[0],
+    description: '',
+    merchant: '',
+    notes: ''
+  });
+
+  useEffect(() => {
+    fetchTransactions();
+    fetchAccounts();
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const data = await apiGet('/api/categories?is_active=true');
+      setCategories(data);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
+  const fetchAccounts = async () => {
+    try {
+      const data = await apiGet('/api/accounts');
+      setAccounts(data.filter((a: any) => a.is_active));
+    } catch (error) {
+      console.error('Error fetching accounts:', error);
+    }
+  };
+
+  const fetchTransactions = async () => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams();
+      if (filter.type) params.append('type', filter.type);
+      if (filter.start_date) params.append('start_date', filter.start_date);
+      if (filter.end_date) params.append('end_date', filter.end_date);
+
+      const data = await apiGet(`/api/transactions?${params.toString()}`);
+      setTransactions(data.transactions || []);
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+      setTransactions([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOpenModal = (transaction?: any) => {
+    if (transaction) {
+      setEditingTransaction(transaction);
+      setFormData({
+        account_id: transaction.account_id,
+        category_id: transaction.category_id,
+        type: transaction.type,
+        amount: transaction.amount,
+        date: transaction.date.split('T')[0],
+        description: transaction.description || '',
+        merchant: transaction.merchant || '',
+        notes: transaction.notes || ''
+      });
+    } else {
+      setEditingTransaction(null);
+      setFormData({
+        account_id: accounts.length > 0 ? accounts[0].id : '',
+        category_id: '',
+        type: 'expense',
+        amount: '',
+        date: new Date().toISOString().split('T')[0],
+        description: '',
+        merchant: '',
+        notes: ''
+      });
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingTransaction(null);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      let response;
+      
+      if (editingTransaction) {
+        response = await apiPut(`/api/transactions?id=${editingTransaction.id}`, formData);
+      } else {
+        response = await apiPost('/api/transactions', formData);
+      }
+
+      if (response && !response.error) {
+        await fetchTransactions();
+        handleCloseModal();
+      } else {
+        alert(response?.message || 'Failed to save transaction');
+      }
+    } catch (error) {
+      console.error('Error saving transaction:', error);
+      alert('Error saving transaction: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this transaction?')) return;
+    
+    try {
+      const response = await apiDelete(`/api/transactions?id=${id}`);
+
+      if (response && !response.error) {
+        await fetchTransactions();
+      } else {
+        alert(response?.message || 'Failed to delete transaction');
+      }
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      alert('Error deleting transaction: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  };
+
+  const filteredTransactions = transactions.filter((txn) => {
+    if (!filter.search) return true;
+    const searchLower = filter.search.toLowerCase();
+    return (
+      txn.description?.toLowerCase().includes(searchLower) ||
+      txn.category_name?.toLowerCase().includes(searchLower) ||
+      txn.merchant?.toLowerCase().includes(searchLower)
+    );
+  });
+
+  const totalIncome = filteredTransactions
+    .filter((t) => t.type === 'income')
+    .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+
+  const totalExpense = filteredTransactions
+    .filter((t) => t.type === 'expense')
+    .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+
+  const getCategoriesByType = (type: string) => {
+    if (type === 'income') return categories.income || [];
+    if (type === 'expense') return categories.all?.filter((c: any) => c.type === 'expense') || [];
+    return [];
+  };
+
+  return (
+    <Layout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white">Transaksi</h1>
+            <p className="text-dark-400 mt-1 text-sm">Kelola semua transaksi keuangan kamu</p>
+          </div>
+          <button onClick={() => handleOpenModal()} className="btn btn-primary flex items-center justify-center space-x-2 text-sm">
+            <Plus className="w-4 h-4" />
+            <span>Tambah Transaksi</span>
+          </button>
+        </div>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+          <div className="card bg-gradient-to-br from-success/20 to-success/5 border-success/30">
+            <div className="flex items-start justify-between mb-2">
+              <p className="text-xs sm:text-sm text-dark-400">Total Income</p>
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-success/20 flex items-center justify-center flex-shrink-0">
+                <ArrowUpRight className="w-4 h-4 sm:w-5 sm:h-5 text-success" />
+              </div>
+            </div>
+            <h3 className={`font-bold text-success break-words ${
+              formatCurrency(totalIncome).length > 15 ? 'text-base sm:text-lg' :
+              formatCurrency(totalIncome).length > 12 ? 'text-lg sm:text-xl' :
+              'text-lg sm:text-2xl'
+            }`}>
+              {formatCurrency(totalIncome)}
+            </h3>
+          </div>
+
+          <div className="card bg-gradient-to-br from-danger/20 to-danger/5 border-danger/30">
+            <div className="flex items-start justify-between mb-2">
+              <p className="text-xs sm:text-sm text-dark-400">Total Expense</p>
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-danger/20 flex items-center justify-center flex-shrink-0">
+                <ArrowDownRight className="w-4 h-4 sm:w-5 sm:h-5 text-danger" />
+              </div>
+            </div>
+            <h3 className={`font-bold text-danger break-words ${
+              formatCurrency(totalExpense).length > 15 ? 'text-base sm:text-lg' :
+              formatCurrency(totalExpense).length > 12 ? 'text-lg sm:text-xl' :
+              'text-lg sm:text-2xl'
+            }`}>
+              {formatCurrency(totalExpense)}
+            </h3>
+          </div>
+
+          <div className="card bg-gradient-to-br from-primary-600/20 to-primary-700/5 border-primary-600/30 col-span-2 lg:col-span-1">
+            <div className="flex items-start justify-between mb-2">
+              <p className="text-xs sm:text-sm text-dark-400">Net Balance</p>
+              <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                totalIncome - totalExpense >= 0 ? 'bg-success/20' : 'bg-danger/20'
+              }`}>
+                <span className="text-lg sm:text-xl">
+                  {totalIncome - totalExpense >= 0 ? '📈' : '📉'}
+                </span>
+              </div>
+            </div>
+            <h3 className={`font-bold break-words ${
+              totalIncome - totalExpense >= 0 ? 'text-success' : 'text-danger'
+            } ${
+              formatCurrency(totalIncome - totalExpense).length > 15 ? 'text-base sm:text-lg' :
+              formatCurrency(totalIncome - totalExpense).length > 12 ? 'text-lg sm:text-xl' :
+              'text-lg sm:text-2xl'
+            }`}>
+              {formatCurrency(totalIncome - totalExpense)}
+            </h3>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="card">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm text-dark-400 mb-2">Search</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-dark-400" />
+                <input
+                  type="text"
+                  placeholder="Cari transaksi..."
+                  value={filter.search}
+                  onChange={(e) => setFilter({ ...filter, search: e.target.value })}
+                  className="input pl-10 w-full"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm text-dark-400 mb-2">Type</label>
+              <select
+                value={filter.type}
+                onChange={(e) => setFilter({ ...filter, type: e.target.value })}
+                className="input w-full"
+              >
+                <option value="">Semua</option>
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-dark-400 mb-2">Start Date</label>
+              <input
+                type="date"
+                value={filter.start_date}
+                onChange={(e) => setFilter({ ...filter, start_date: e.target.value })}
+                className="input w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-dark-400 mb-2">End Date</label>
+              <input
+                type="date"
+                value={filter.end_date}
+                onChange={(e) => setFilter({ ...filter, end_date: e.target.value })}
+                className="input w-full"
+              />
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mt-4">
+            <button onClick={fetchTransactions} className="btn btn-primary text-sm">
+              Apply Filters
+            </button>
+            <button
+              onClick={() => {
+                setFilter({ type: '', start_date: '', end_date: '', search: '' });
+                fetchTransactions();
+              }}
+              className="btn btn-secondary text-sm"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+
+        {/* Transactions List */}
+        <div className="card">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+            <h2 className="text-lg sm:text-xl font-bold text-white">
+              All Transactions ({filteredTransactions.length})
+            </h2>
+            <button className="btn btn-secondary text-sm flex items-center justify-center space-x-2">
+              <Download className="w-4 h-4" />
+              <span>Export</span>
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="text-center py-12">
+              <div className="w-12 h-12 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-dark-400 text-sm">Loading transactions...</p>
+            </div>
+          ) : filteredTransactions.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-dark-400 mb-4">No transactions found</p>
+              <button onClick={() => handleOpenModal()} className="btn btn-primary">
+                Add Your First Transaction
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredTransactions.map((txn) => (
+                <div
+                  key={txn.id}
+                  className="p-3 sm:p-4 bg-dark-800 rounded-lg hover:bg-dark-750 transition-colors"
+                >
+                  {/* Mobile Layout */}
+                  <div className="block lg:hidden space-y-3">
+                    {/* Header with Icon & Info */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start space-x-3 flex-1 min-w-0">
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                          txn.type === 'income' ? 'bg-success/20' : 'bg-danger/20'
+                        }`}>
+                          {txn.type === 'income' ? (
+                            <ArrowUpRight className="w-5 h-5 text-success" />
+                          ) : (
+                            <ArrowDownRight className="w-5 h-5 text-danger" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-white text-sm truncate">
+                            {txn.description || txn.category_name}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-dark-400 mt-1">
+                            <span className="flex items-center space-x-1">
+                              <span>{txn.category_icon || '📊'}</span>
+                              <span>{txn.category_name}</span>
+                            </span>
+                            <span className="text-dark-600">•</span>
+                            <span>{txn.account_name}</span>
+                            {txn.merchant && (
+                              <>
+                                <span className="text-dark-600">•</span>
+                                <span>{txn.merchant}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Action Buttons */}
+                      <div className="flex items-center space-x-1 flex-shrink-0">
+                        <button
+                          onClick={() => handleOpenModal(txn)}
+                          className="p-2 hover:bg-dark-700 rounded-lg transition-colors"
+                          title="Edit"
+                        >
+                          <Edit2 className="w-4 h-4 text-dark-400 hover:text-primary-400" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(txn.id)}
+                          className="p-2 hover:bg-dark-700 rounded-lg transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4 text-dark-400 hover:text-danger" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* Amount & Date */}
+                    <div className="bg-dark-900/50 p-2 rounded">
+                      <p className={`font-bold break-words ${
+                        txn.type === 'income' ? 'text-success' : 'text-danger'
+                      } ${
+                        formatCurrency(txn.amount).length > 15 ? 'text-base' :
+                        formatCurrency(txn.amount).length > 12 ? 'text-lg' :
+                        'text-xl'
+                      }`}>
+                        {txn.type === 'income' ? '+' : '-'}
+                        {formatCurrency(txn.amount)}
+                      </p>
+                      <p className="text-xs text-dark-400 mt-1">{formatDate(txn.date)}</p>
+                    </div>
+                  </div>
+                  
+                  {/* Desktop Layout */}
+                  <div className="hidden lg:flex items-center justify-between">
+                    <div className="flex items-center space-x-4 flex-1">
+                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                        txn.type === 'income' ? 'bg-success/20' : 'bg-danger/20'
+                      }`}>
+                        {txn.type === 'income' ? (
+                          <ArrowUpRight className="w-6 h-6 text-success" />
+                        ) : (
+                          <ArrowDownRight className="w-6 h-6 text-danger" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-white">
+                          {txn.description || txn.category_name}
+                        </p>
+                        <div className="flex items-center space-x-2 text-sm text-dark-400 mt-1">
+                          <span className="flex items-center space-x-1">
+                            <span>{txn.category_icon || '📊'}</span>
+                            <span>{txn.category_name}</span>
+                          </span>
+                          <span>•</span>
+                          <span>{txn.account_name}</span>
+                          {txn.merchant && (
+                            <>
+                              <span>•</span>
+                              <span>{txn.merchant}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <div className="text-right">
+                        <p className={`font-bold text-lg ${
+                          txn.type === 'income' ? 'text-success' : 'text-danger'
+                        }`}>
+                          {txn.type === 'income' ? '+' : '-'}
+                          {formatCurrency(txn.amount)}
+                        </p>
+                        <p className="text-sm text-dark-400 mt-1">{formatDate(txn.date)}</p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleOpenModal(txn)}
+                          className="p-2 hover:bg-dark-600 rounded-lg transition-colors"
+                          title="Edit"
+                        >
+                          <Edit2 className="w-4 h-4 text-dark-400 hover:text-primary-400" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(txn.id)}
+                          className="p-2 hover:bg-dark-600 rounded-lg transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4 text-dark-400 hover:text-danger" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Modal Form */}
+        <Modal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          title={editingTransaction ? 'Edit Transaction' : 'Add New Transaction'}
+        >
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-dark-400 mb-2">
+                Type
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, type: 'income', category_id: '' })}
+                  className={`p-4 rounded-lg border-2 transition-all ${
+                    formData.type === 'income'
+                      ? 'border-success bg-success/10 text-success'
+                      : 'border-dark-700 bg-dark-800 text-dark-400 hover:border-dark-600'
+                  }`}
+                >
+                  <ArrowUpRight className="w-6 h-6 mx-auto mb-2" />
+                  <span className="font-medium">Income</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, type: 'expense', category_id: '' })}
+                  className={`p-4 rounded-lg border-2 transition-all ${
+                    formData.type === 'expense'
+                      ? 'border-danger bg-danger/10 text-danger'
+                      : 'border-dark-700 bg-dark-800 text-dark-400 hover:border-dark-600'
+                  }`}
+                >
+                  <ArrowDownRight className="w-6 h-6 mx-auto mb-2" />
+                  <span className="font-medium">Expense</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-dark-400 mb-2">
+                  Account
+                </label>
+                <select
+                  value={formData.account_id}
+                  onChange={(e) => setFormData({ ...formData, account_id: e.target.value })}
+                  className="input w-full"
+                  required
+                >
+                  <option value="">Select Account</option>
+                  {accounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} ({formatCurrency(acc.balance)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-dark-400 mb-2">
+                  Category
+                </label>
+                <select
+                  value={formData.category_id}
+                  onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
+                  className="input w-full"
+                  required
+                >
+                  <option value="">Select Category</option>
+                  {getCategoriesByType(formData.type).map((cat: any) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.icon} {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-dark-400 mb-2">
+                  Amount
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-dark-400">
+                    Rp
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.amount}
+                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                    className="input w-full pl-12"
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-dark-400 mb-2">
+                  Date
+                </label>
+                <input
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  className="input w-full"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-dark-400 mb-2">
+                Description
+              </label>
+              <input
+                type="text"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="input w-full"
+                placeholder="e.g., Lunch at cafe"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-dark-400 mb-2">
+                Merchant (Optional)
+              </label>
+              <input
+                type="text"
+                value={formData.merchant}
+                onChange={(e) => setFormData({ ...formData, merchant: e.target.value })}
+                className="input w-full"
+                placeholder="e.g., Starbucks"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-dark-400 mb-2">
+                Notes (Optional)
+              </label>
+              <textarea
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                className="input w-full"
+                rows={3}
+                placeholder="Additional notes..."
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-4">
+              <button type="submit" className="btn btn-primary flex-1">
+                {editingTransaction ? 'Update Transaction' : 'Add Transaction'}
+              </button>
+              <button
+                type="button"
+                onClick={handleCloseModal}
+                className="btn btn-secondary flex-1"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </Modal>
+      </div>
+    </Layout>
+  );
+}
