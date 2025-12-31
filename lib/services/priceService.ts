@@ -490,8 +490,10 @@ async function fetchFromFinnhub(symbol: string): Promise<PriceData> {
  * Get cached price from database
  */
 async function getCachedPriceFromDB(
-  instrumentId: number
+  instrumentId: number | null
 ): Promise<PriceData | null> {
+  if (!instrumentId) return null;
+  
   try {
     const result = await dbQuery(
       `SELECT last_price, last_price_idr, last_updated, price_source, currency 
@@ -530,10 +532,12 @@ async function getCachedPriceFromDB(
  * Save price to database cache
  */
 async function savePriceToDB(
-  instrumentId: number,
+  instrumentId: number | null,
   priceData: PriceData,
   error: string | null = null
 ): Promise<void> {
+  if (!instrumentId) return;
+  
   try {
     await dbQuery(
       `UPDATE investment_instruments 
@@ -565,7 +569,7 @@ async function savePriceToDB(
  * Get price for a specific instrument
  */
 export async function getInstrumentPrice(
-  instrumentId: number,
+  instrumentId: number | null,
   priceSource: string,
   priceMapping: string,
   skipCache: boolean = false
