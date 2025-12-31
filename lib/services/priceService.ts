@@ -567,7 +567,8 @@ async function savePriceToDB(
 export async function getInstrumentPrice(
   instrumentId: number,
   priceSource: string,
-  priceMapping: string
+  priceMapping: string,
+  skipCache: boolean = false
 ): Promise<PriceData | null> {
   if (!priceSource || !priceMapping) {
     throw new Error(
@@ -578,12 +579,14 @@ export async function getInstrumentPrice(
   // Normalize price source
   const normalizedSource = priceSource.toLowerCase().replace(/\s+/g, '_');
 
-  // Check memory cache first
+  // Check memory cache first (unless skipCache is true)
   const cacheKey = `${normalizedSource}_${priceMapping}`;
-  const cached = priceCache.get<PriceData>(cacheKey);
-  if (cached) {
-    console.log(`💾 Using memory cache for ${priceMapping}`);
-    return cached;
+  if (!skipCache) {
+    const cached = priceCache.get<PriceData>(cacheKey);
+    if (cached) {
+      console.log(`💾 Using memory cache for ${priceMapping}`);
+      return cached;
+    }
   }
 
   // Get previous price for validation
