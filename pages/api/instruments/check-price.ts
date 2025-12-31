@@ -77,10 +77,10 @@ async function handler(req: AuthRequest, res: NextApiResponse) {
       });
     }
 
-    // Check if we have valid price data (either price or priceIDR must exist)
+    // Check if we have valid price data (either price or priceInIDR must exist)
     const hasValidPrice = (
       (priceData.price !== undefined && priceData.price !== null && !isNaN(priceData.price)) ||
-      (priceData.priceIDR !== undefined && priceData.priceIDR !== null && !isNaN(priceData.priceIDR))
+      (priceData.priceInIDR !== undefined && priceData.priceInIDR !== null && !isNaN(priceData.priceInIDR))
     );
 
     if (!hasValidPrice) {
@@ -130,13 +130,13 @@ async function handler(req: AuthRequest, res: NextApiResponse) {
 
     console.log(`✅ Price check successful: ${priceData.source || price_source}`);
 
-    // Ensure we have both price and priceIDR
+    // Ensure we have both price and priceInIDR
     // If one is missing, calculate it
     let finalPrice = priceData.price;
-    let finalPriceIDR = priceData.priceIDR;
+    let finalPriceIDR = priceData.priceInIDR;
     const currency = priceData.currency || 'USD';
 
-    // If priceIDR is missing but we have price, calculate it
+    // If priceInIDR is missing but we have price, calculate it
     if (finalPrice && !finalPriceIDR) {
       if (currency === 'IDR') {
         finalPriceIDR = finalPrice;
@@ -147,7 +147,7 @@ async function handler(req: AuthRequest, res: NextApiResponse) {
       }
     }
 
-    // If price is missing but we have priceIDR, calculate it
+    // If price is missing but we have priceInIDR, calculate it
     if (finalPriceIDR && !finalPrice) {
       if (currency === 'IDR') {
         finalPrice = finalPriceIDR;

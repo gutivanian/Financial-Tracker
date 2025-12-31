@@ -26,9 +26,9 @@ async function handler(req: AuthRequest, res: NextApiResponse) {
     }
 
     const priceData = await getInstrumentPrice(
+      null, // No instrument ID for ad-hoc price query
       asset_type as string,
-      symbol as string,
-      market as string | undefined
+      symbol as string
     );
 
     if (!priceData) {

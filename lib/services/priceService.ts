@@ -45,6 +45,7 @@ export interface PriceData {
   lastUpdated: string;
   fromCache?: boolean;
   cacheAge?: number; // in minutes
+  error?: string; // for error responses
 }
 
 interface APIMetrics {

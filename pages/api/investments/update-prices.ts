@@ -100,7 +100,7 @@ async function handler(req: AuthRequest, res: NextApiResponse) {
             stats.updated.push({
               instrument: `${inst.symbol} - ${inst.name}`,
               price: priceData.price,
-              priceIDR: priceData.priceIDR,
+              priceIDR: priceData.priceInIDR,
               source: priceData.source,
             });
           }
