@@ -69,7 +69,7 @@ interface PriceSourceInfo {
 // ============================================================================
 const priceCache = new NodeCache({ stdTTL: CONFIG.cache.ttl });
 const metrics: Record<string, APIMetrics> = {};
-let lastKnownExchangeRate = CONFIG.exchange.fallbackRate;
+let lastKnownExchangeRate: number = CONFIG.exchange.fallbackRate;
 
 // API Keys
 const ALPHA_VANTAGE_KEY = process.env.ALPHA_VANTAGE_API_KEY || 'demo';
