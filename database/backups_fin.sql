@@ -875,8 +875,26 @@ INSERT INTO public.categories VALUES (15, 1, 'Travel', 'expense', NULL, 'Plane',
 INSERT INTO public.categories VALUES (16, 1, 'Emergency Fund', 'expense', NULL, 'AlertCircle', '#10b981', 'savings', true, '2025-12-04 21:29:32.724357');
 INSERT INTO public.categories VALUES (17, 1, 'Investasi', 'expense', NULL, 'TrendingUp', '#3b82f6', 'savings', true, '2025-12-04 21:29:32.724357');
 INSERT INTO public.categories VALUES (18, 1, 'Tabungan', 'expense', NULL, 'PiggyBank', '#8b5cf6', 'savings', true, '2025-12-04 21:29:32.724357');
-INSERT INTO public.categories VALUES (19, 1, 'ngewe', 'expense', NULL, '🎮', '#6366f1', 'savings', true, '2025-12-06 17:30:02.086021');
-INSERT INTO public.categories VALUES (20, 1, 'haha', 'expense', NULL, '☕', '#6366f1', 'needs', true, '2025-12-06 17:33:59.758957');
+INSERT INTO public.categories VALUES (19, 1, 'Pendapatan Lain', 'income', NULL, 'DollarSign', '#14b8a6', NULL, true, '2026-01-02 00:00:00');
+INSERT INTO public.categories VALUES (20, 1, 'Pendidikan', 'expense', NULL, 'BookOpen', '#f59e0b', 'needs', true, '2026-01-02 00:00:00');
+INSERT INTO public.categories VALUES (21, 1, 'Internet & Telekomunikasi', 'expense', NULL, 'Wifi', '#06b6d4', 'needs', true, '2026-01-02 00:00:00');
+INSERT INTO public.categories VALUES (22, 1, 'Perawatan Diri', 'expense', NULL, 'Scissors', '#ec4899', 'needs', true, '2026-01-02 00:00:00');
+INSERT INTO public.categories VALUES (23, 1, 'Perbaikan & Maintenance', 'expense', NULL, 'Wrench', '#64748b', 'needs', true, '2026-01-02 00:00:00');
+INSERT INTO public.categories VALUES (24, 1, 'Hobi', 'expense', NULL, 'Palette', '#a855f7', 'wants', true, '2026-01-02 00:00:00');
+INSERT INTO public.categories VALUES (25, 1, 'Olahraga & Fitness', 'expense', NULL, 'Dumbbell', '#10b981', 'wants', true, '2026-01-02 00:00:00');
+INSERT INTO public.categories VALUES (26, 1, 'Hadiah', 'expense', NULL, 'Gift', '#f43f5e', 'wants', true, '2026-01-02 00:00:00');
+INSERT INTO public.categories VALUES (27, 1, 'Pet Care', 'expense', NULL, 'Dog', '#fb923c', 'wants', true, '2026-01-02 00:00:00');
+INSERT INTO public.categories VALUES (28, 1, 'Donasi & Zakat', 'expense', NULL, 'Heart', '#10b981', 'savings', true, '2026-01-02 00:00:00');
+INSERT INTO public.categories VALUES (29, 1, 'Pajak', 'expense', NULL, 'FileText', '#64748b', 'needs', true, '2026-01-02 00:00:00');
+INSERT INTO public.categories VALUES (30, 1, 'Passive Income', 'income', NULL, 'TrendingUp', '#10b981', NULL, true, '2026-01-02 00:00:00');
+INSERT INTO public.categories VALUES (31, 1, 'Cicilan & Utang', 'expense', NULL, 'CreditCard', '#ef4444', 'needs', true, '2026-01-02 00:00:00');
+INSERT INTO public.categories VALUES (32, 1, 'Childcare/Anak', 'expense', NULL, 'Baby', '#f59e0b', 'needs', true, '2026-01-02 00:00:00');
+INSERT INTO public.categories VALUES (33, 1, 'Pakaian', 'expense', NULL, 'Shirt', '#8b5cf6', 'needs', true, '2026-01-02 00:00:00');
+INSERT INTO public.categories VALUES (34, 1, 'Beauty & Spa', 'expense', NULL, 'Sparkles', '#ec4899', 'wants', true, '2026-01-02 00:00:00');
+INSERT INTO public.categories VALUES (35, 1, 'Gadgets & Elektronik', 'expense', NULL, 'Smartphone', '#3b82f6', 'wants', true, '2026-01-02 00:00:00');
+INSERT INTO public.categories VALUES (36, 1, 'Events & Celebrations', 'expense', NULL, 'PartyPopper', '#f43f5e', 'wants', true, '2026-01-02 00:00:00');
+INSERT INTO public.categories VALUES (37, 1, 'Business Expenses', 'expense', NULL, 'Briefcase', '#64748b', 'business', true, '2026-01-02 00:00:00');
+INSERT INTO public.categories VALUES (38, 1, 'Professional Services', 'expense', NULL, 'Users', '#06b6d4', 'business', true, '2026-01-02 00:00:00');
 
 
 --

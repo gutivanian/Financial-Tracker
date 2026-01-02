@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
 import Modal from '@/components/Modal';
+import IconRenderer from '@/components/IconRenderer';
+import IconPicker from '@/components/IconPicker';
 import { Plus, Search, Edit2, Trash2, Folder, TrendingUp, TrendingDown } from 'lucide-react';
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
 
@@ -17,7 +19,7 @@ export default function Categories() {
   const [formData, setFormData] = useState({
     name: '',
     type: 'expense',
-    icon: '📊',
+    icon: 'Folder',
     color: '#6366f1',
     budget_type: 'needs',
     parent_id: '',
@@ -50,7 +52,7 @@ export default function Categories() {
       setFormData({
         name: category.name,
         type: category.type,
-        icon: category.icon || '📊',
+        icon: category.icon || 'Folder',
         color: category.color || '#6366f1',
         budget_type: category.budget_type || 'needs',
         parent_id: category.parent_id || '',
@@ -61,7 +63,7 @@ export default function Categories() {
       setFormData({
         name: '',
         type: 'expense',
-        icon: '📊',
+        icon: 'Folder',
         color: '#6366f1',
         budget_type: 'needs',
         parent_id: '',
@@ -125,14 +127,6 @@ export default function Categories() {
     wants: 'info',
     savings: 'success',
   };
-
-  // Emoji picker options
-  const commonIcons = [
-    '📊', '💰', '🏠', '🚗', '🍔', '🎬', '🛒', '💡', 
-    '📱', '👕', '✈️', '🏥', '📚', '🎮', '☕', '🍕',
-    '💳', '🏦', '🎯', '💼', '🎓', '🏃', '🎨', '🎵',
-    '🛍️', '🚇', '⚡', '🏡', '🔧', '💊', '🍜', '🎂'
-  ];
 
   const colorPresets = [
     '#ef4444', '#f59e0b', '#10b981', '#3b82f6', 
@@ -263,10 +257,10 @@ export default function Categories() {
                     <tr key={cat.id} className="border-b border-dark-800 hover:bg-dark-800 transition-colors">
                       <td className="py-3 px-4">
                         <div 
-                          className="w-10 h-10 rounded-lg flex items-center justify-center text-xl"
+                          className="w-10 h-10 rounded-lg flex items-center justify-center"
                           style={{ backgroundColor: cat.color + '20' }}
                         >
-                          {cat.icon || '📊'}
+                          <IconRenderer iconName={cat.icon} className="w-6 h-6" fallbackEmoji="📊" />
                         </div>
                       </td>
                       <td className="py-3 px-4">
@@ -409,29 +403,9 @@ export default function Categories() {
               <label className="block text-sm font-medium text-dark-400 mb-2">
                 Icon *
               </label>
-              <div className="grid grid-cols-8 gap-2 mb-2">
-                {commonIcons.map((icon) => (
-                  <button
-                    key={icon}
-                    type="button"
-                    onClick={() => setFormData({ ...formData, icon })}
-                    className={`w-10 h-10 flex items-center justify-center text-xl rounded-lg transition-all ${
-                      formData.icon === icon
-                        ? 'bg-primary-600 scale-110 shadow-lg'
-                        : 'bg-dark-800 hover:bg-dark-700'
-                    }`}
-                  >
-                    {icon}
-                  </button>
-                ))}
-              </div>
-              <input
-                type="text"
+              <IconPicker
                 value={formData.icon}
-                onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
-                className="input w-full"
-                placeholder="Or type custom emoji"
-                maxLength={2}
+                onChange={(icon) => setFormData({ ...formData, icon })}
               />
             </div>
 
@@ -487,10 +461,10 @@ export default function Categories() {
               <p className="text-xs text-dark-400 mb-2">Preview:</p>
               <div className="flex items-center space-x-3">
                 <div 
-                  className="w-12 h-12 rounded-lg flex items-center justify-center text-2xl"
+                  className="w-12 h-12 rounded-lg flex items-center justify-center"
                   style={{ backgroundColor: formData.color + '20' }}
                 >
-                  {formData.icon}
+                  <IconRenderer iconName={formData.icon} className="w-7 h-7" fallbackEmoji="📊" />
                 </div>
                 <div>
                   <p className="font-medium text-white">{formData.name || 'Category Name'}</p>

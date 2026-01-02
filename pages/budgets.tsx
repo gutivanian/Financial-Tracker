@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
 import Modal from '@/components/Modal';
+import IconRenderer from '@/components/IconRenderer';
 import { Plus, AlertTriangle, Edit2, Trash2 } from 'lucide-react';
 import { formatCurrency, formatPercentage } from '@/lib/utils';
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
@@ -303,9 +304,7 @@ export default function Budgets() {
                             className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
                             style={{ backgroundColor: budget.category_color + '20' }}
                           >
-                            <span className="text-xl">
-                              {budget.category_icon || '📊'}
-                            </span>
+                            <IconRenderer iconName={budget.category_icon} className="w-6 h-6" fallbackEmoji="📊" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <h3 className="font-semibold text-white text-sm truncate">
@@ -395,9 +394,7 @@ export default function Budgets() {
                             className="w-10 h-10 rounded-lg flex items-center justify-center"
                             style={{ backgroundColor: budget.category_color + '20' }}
                           >
-                            <span className="text-xl">
-                              {budget.category_icon || '📊'}
-                            </span>
+                            <IconRenderer iconName={budget.category_icon} className="w-6 h-6" fallbackEmoji="📊" />
                           </div>
                           <div className="flex-1">
                             <h3 className="font-semibold text-white">

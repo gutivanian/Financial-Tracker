@@ -143,9 +143,17 @@ const LoginPage: React.FC = () => {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-dark-400 text-sm mt-6 animate-fadeIn" style={{ animationDelay: '0.2s' }}>
-          Aplikasi Personal Finance Management
-        </p>
+        <div className="mt-6 text-center animate-fadeIn" style={{ animationDelay: '0.2s' }}>
+          <p className="text-dark-400 text-sm mb-3">
+            Belum punya akun?{' '}
+            <a href="/register" className="text-primary-500 hover:text-primary-400 font-medium transition-colors">
+              Daftar di sini
+            </a>
+          </p>
+          <p className="text-dark-400 text-sm">
+            Aplikasi Personal Finance Management
+          </p>
+        </div>
       </div>
     </div>
   );

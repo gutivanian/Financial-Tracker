@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
 import Modal from '@/components/Modal';
+import IconRenderer from '@/components/IconRenderer';
 import { Plus, Filter, Download, Search, ArrowUpRight, ArrowDownRight, Edit2, Trash2 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
@@ -357,7 +358,7 @@ export default function Transactions() {
                           </p>
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-dark-400 mt-1">
                             <span className="flex items-center space-x-1">
-                              <span>{txn.category_icon || '📊'}</span>
+                              <IconRenderer iconName={txn.category_icon} className="w-4 h-4" fallbackEmoji="📊" />
                               <span>{txn.category_name}</span>
                             </span>
                             <span className="text-dark-600">•</span>
@@ -425,7 +426,7 @@ export default function Transactions() {
                         </p>
                         <div className="flex items-center space-x-2 text-sm text-dark-400 mt-1">
                           <span className="flex items-center space-x-1">
-                            <span>{txn.category_icon || '📊'}</span>
+                            <IconRenderer iconName={txn.category_icon} className="w-4 h-4" fallbackEmoji="📊" />
                             <span>{txn.category_name}</span>
                           </span>
                           <span>•</span>

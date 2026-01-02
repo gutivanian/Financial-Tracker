@@ -1,6 +1,7 @@
 // pages/reports.tsx
 import React, { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
+import IconRenderer from '@/components/IconRenderer';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -66,7 +67,17 @@ export default function Reports() {
     );
   }
 
-  if (!data) return null;
+  if (!data || !data.summary) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center">
+            <p className="text-dark-400">No data available</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   const COLORS = ['#159999', '#1a80b0', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
@@ -206,7 +217,7 @@ export default function Reports() {
             <h2 className="text-xl font-semibold text-white">Monthly Trends (Last 6 Months)</h2>
           </div>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={data.monthlyTrends}>
+            <LineChart data={data.monthlyTrends || []}>
               <CartesianGrid strokeDasharray="3 3" stroke="#2a3f3f" />
               <XAxis dataKey="month_label" stroke="#6b8e8e" />
               <YAxis stroke="#6b8e8e" />
@@ -252,11 +263,14 @@ export default function Reports() {
               <h2 className="text-xl font-semibold text-white">Category Analysis</h2>
             </div>
             <div className="space-y-4 max-h-96 overflow-y-auto">
-              {data.categoryAnalysis.map((cat: any, index: number) => (
+              {!data.categoryAnalysis || data.categoryAnalysis.length === 0 ? (
+                <p className="text-dark-400 text-center py-8">No category data available</p>
+              ) : (
+                data.categoryAnalysis.map((cat: any, index: number) => (
                 <div key={cat.category_id} className="space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-xl">{cat.category_icon}</span>
+                      <IconRenderer iconName={cat.category_icon} className="w-5 h-5" fallbackEmoji="📊" />
                       <span className="text-white font-medium">{cat.category_name}</span>
                       {cat.budget_type && (
                         <span className="text-xs px-2 py-1 bg-dark-700 rounded text-dark-400">
@@ -301,7 +315,8 @@ export default function Reports() {
                     )}
                   </div>
                 </div>
-              ))}
+              ))
+              )}
             </div>
           </div>
 
@@ -312,14 +327,14 @@ export default function Reports() {
               <h2 className="text-xl font-semibold text-white">Budget Performance</h2>
             </div>
             <div className="space-y-4 max-h-96 overflow-y-auto">
-              {data.budgetPerformance.length === 0 ? (
+              {!data.budgetPerformance || data.budgetPerformance.length === 0 ? (
                 <p className="text-dark-400 text-center py-8">No budget data available</p>
               ) : (
                 data.budgetPerformance.map((budget: any) => (
                   <div key={budget.id} className="bg-dark-800 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <span className="text-xl">{budget.category_icon}</span>
+                        <IconRenderer iconName={budget.category_icon} className="w-5 h-5" fallbackEmoji="📊" />
                         <div>
                           <div className="text-white font-medium">{budget.category_name}</div>
                           <div className="text-xs text-dark-400">{budget.budget_type}</div>
@@ -371,7 +386,7 @@ export default function Reports() {
         </div>
 
         {/* Top Merchants */}
-        {data.topMerchants.length > 0 && (
+        {data.topMerchants && data.topMerchants.length > 0 && (
           <div className="bg-dark-850 border border-dark-700 rounded-xl p-6">
             <div className="flex items-center gap-3 mb-6">
               <Store className="w-6 h-6 text-primary-400" />
@@ -399,7 +414,7 @@ export default function Reports() {
         )}
 
         {/* Daily Spending Pattern */}
-        {data.dailyPattern.length > 0 && (
+        {data.dailyPattern && data.dailyPattern.length > 0 && (
           <div className="bg-dark-850 border border-dark-700 rounded-xl p-6">
             <div className="flex items-center gap-3 mb-6">
               <Calendar className="w-6 h-6 text-primary-400" />

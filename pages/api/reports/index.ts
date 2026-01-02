@@ -102,10 +102,25 @@ async function handler(
       userId, 
       currentPeriod.startDate, 
       currentPeriod.endDate,
-      userId,
       comparisonPeriod.startDate,
       comparisonPeriod.endDate
     ]);
+
+    // Default summary if no data
+    const summaryData = incomeExpenseResult.rows[0] || {
+      current_income: 0,
+      current_expense: 0,
+      current_net: 0,
+      current_income_count: 0,
+      current_expense_count: 0,
+      comparison_income: 0,
+      comparison_expense: 0,
+      comparison_net: 0,
+      comparison_income_count: 0,
+      comparison_expense_count: 0,
+      income_change_percent: 0,
+      expense_change_percent: 0
+    };
 
     // Query 2: Category-wise Spending Analysis
     const categoryAnalysisQuery = `
@@ -178,12 +193,8 @@ async function handler(
       userId, 
       currentPeriod.startDate, 
       currentPeriod.endDate,
-      userId,
       comparisonPeriod.startDate,
-      comparisonPeriod.endDate,
-      userId,
-      currentPeriod.endDate,
-      currentPeriod.startDate
+      comparisonPeriod.endDate
     ]);
 
     // Query 3: Monthly Trends (Last 6 Months)
@@ -301,12 +312,12 @@ async function handler(
     ]);
 
     res.status(200).json({
-      summary: incomeExpenseResult.rows[0],
-      categoryAnalysis: categoryResult.rows,
-      monthlyTrends: trendsResult.rows,
-      budgetPerformance: budgetResult.rows,
-      topMerchants: merchantsResult.rows,
-      dailyPattern: dailyPatternResult.rows,
+      summary: summaryData,
+      categoryAnalysis: categoryResult.rows || [],
+      monthlyTrends: trendsResult.rows || [],
+      budgetPerformance: budgetResult.rows || [],
+      topMerchants: merchantsResult.rows || [],
+      dailyPattern: dailyPatternResult.rows || [],
       periods: {
         current: {
           start: currentPeriod.startDate,
