@@ -22,8 +22,9 @@ export default function IconRenderer({
     return <span className={className}>{fallbackEmoji}</span>;
   }
 
-  // Check if it's an emoji (contains emoji characters)
-  const isEmoji = /[\p{Emoji}]/u.test(iconName);
+  // Check if it's an emoji (contains emoji characters or is short string)
+  // Simple check: if it's 1-2 characters and not alphanumeric, likely emoji
+  const isEmoji = iconName.length <= 2 && !/^[a-zA-Z]+$/.test(iconName);
   
   if (isEmoji) {
     return <span className={className}>{iconName}</span>;
