@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
 import Modal from '@/components/Modal';
+import AccountSelect from '@/components/AccountSelect';
 import { Plus, AlertCircle, DollarSign, Calendar, Edit2, Trash2, CheckCircle } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
@@ -12,8 +13,11 @@ export default function Debts() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [editingDebt, setEditingDebt] = useState<any>(null);
   const [selectedDebt, setSelectedDebt] = useState<any>(null);
+  const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     creditor_name: '',
     debt_type: 'personal',
@@ -22,10 +26,12 @@ export default function Debts() {
     current_balance: '',
     minimum_payment: '',
     due_date: '',
+    payment_type: 'manual',
     start_date: new Date().toISOString().split('T')[0],
     notes: ''
   });
   const [paymentData, setPaymentData] = useState({
+    account_id: '',
     amount: '',
     payment_date: new Date().toISOString().split('T')[0],
     notes: ''
@@ -33,7 +39,19 @@ export default function Debts() {
 
   useEffect(() => {
     fetchDebts();
+    fetchAccounts();
   }, []);
+
+  const fetchAccounts = async () => {
+    try {
+      const data = await apiGet('/api/accounts');
+      console.log('Fetched accounts:', data); // Debug log
+      // API returns array directly, not { accounts: [] }
+      setAccounts(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching accounts:', error);
+    }
+  };
 
   const fetchDebts = async () => {
     try {
@@ -59,6 +77,7 @@ export default function Debts() {
         current_balance: debt.current_balance,
         minimum_payment: debt.minimum_payment,
         due_date: debt.payment_due_date?.toString() || '',
+        payment_type: debt.payment_type || 'manual',
         start_date: debt.start_date.split('T')[0],
         notes: debt.notes || ''
       });
@@ -72,6 +91,7 @@ export default function Debts() {
         current_balance: '',
         minimum_payment: '',
         due_date: '',
+        payment_type: 'manual',
         start_date: new Date().toISOString().split('T')[0],
         notes: ''
       });
@@ -86,7 +106,10 @@ export default function Debts() {
 
   const handleOpenPaymentModal = (debt: any) => {
     setSelectedDebt(debt);
+    const activeAccounts = accounts.filter(acc => acc.is_active);
+    console.log('Active accounts for payment:', activeAccounts); // Debug log
     setPaymentData({
+      account_id: activeAccounts.length > 0 ? activeAccounts[0].id.toString() : '',
       amount: debt.minimum_payment || '',
       payment_date: new Date().toISOString().split('T')[0],
       notes: ''
@@ -97,6 +120,24 @@ export default function Debts() {
   const handleClosePaymentModal = () => {
     setIsPaymentModalOpen(false);
     setSelectedDebt(null);
+  };
+
+  const handleOpenHistoryModal = async (debt: any) => {
+    setSelectedDebt(debt);
+    try {
+      const data = await apiGet(`/api/debts/${debt.id}/payments`);
+      setPaymentHistory(data.payments || []);
+    } catch (error) {
+      console.error('Error fetching payment history:', error);
+      setPaymentHistory([]);
+    }
+    setIsHistoryModalOpen(true);
+  };
+
+  const handleCloseHistoryModal = () => {
+    setIsHistoryModalOpen(false);
+    setSelectedDebt(null);
+    setPaymentHistory([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -321,6 +362,13 @@ export default function Debts() {
                         
                         {/* Action Buttons */}
                         <div className="flex items-center space-x-1 flex-shrink-0">
+                          <button
+                            onClick={() => handleOpenHistoryModal(debt)}
+                            className="btn btn-secondary btn-sm text-xs px-2 py-1"
+                            title="View payment history"
+                          >
+                            History
+                          </button>
                           {!isPaidOff && (
                             <button
                               onClick={() => handleOpenPaymentModal(debt)}
@@ -431,6 +479,13 @@ export default function Debts() {
                             <p className="text-xs text-dark-400">Interest: {debt.interest_rate}%</p>
                           </div>
                           <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => handleOpenHistoryModal(debt)}
+                              className="btn btn-secondary btn-sm"
+                              title="View payment history"
+                            >
+                              History
+                            </button>
                             {!isPaidOff && (
                               <button
                                 onClick={() => handleOpenPaymentModal(debt)}
@@ -515,6 +570,39 @@ export default function Debts() {
                 <option value="student">Student Loan</option>
                 <option value="other">Other</option>
               </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-dark-400 mb-2">Payment Type</label>
+              <div className="flex space-x-4">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="payment_type"
+                    value="manual"
+                    checked={formData.payment_type === 'manual'}
+                    onChange={(e) => setFormData({ ...formData, payment_type: e.target.value })}
+                    className="text-primary focus:ring-primary"
+                  />
+                  <span className="text-sm text-dark-300">Manual</span>
+                </label>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="payment_type"
+                    value="autopayment"
+                    checked={formData.payment_type === 'autopayment'}
+                    onChange={(e) => setFormData({ ...formData, payment_type: e.target.value })}
+                    className="text-primary focus:ring-primary"
+                  />
+                  <span className="text-sm text-dark-300">Autopayment</span>
+                </label>
+              </div>
+              <p className="text-xs text-dark-500 mt-1">
+                {formData.payment_type === 'autopayment' 
+                  ? 'Payment will be automatically created on due date' 
+                  : 'You will receive reminder 3 days before due date'}
+              </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -630,6 +718,9 @@ export default function Debts() {
           maxWidth="max-w-md"
         >
           <form onSubmit={handlePaymentSubmit} className="space-y-4">
+            {/* Debug info */}
+            {console.log('Rendering payment modal, accounts:', accounts, 'paymentData:', paymentData)}
+            
             <div className="bg-dark-800 p-4 rounded-lg border border-dark-700">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm text-dark-400">Current Balance</span>
@@ -643,6 +734,22 @@ export default function Debts() {
                   {formatCurrency(selectedDebt?.minimum_payment || 0)}
                 </span>
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-dark-400 mb-2">Account</label>
+              {accounts.length === 0 ? (
+                <div className="text-sm text-danger">No accounts found. Please create an account first.</div>
+              ) : (
+                <AccountSelect
+                  accounts={accounts.filter(acc => acc.is_active)}
+                  value={paymentData.account_id}
+                  onChange={(accountId) => setPaymentData({ ...paymentData, account_id: accountId })}
+                  placeholder="Select Account"
+                  formatBalance={formatCurrency}
+                  required
+                />
+              )}
             </div>
 
             <div>
@@ -692,6 +799,73 @@ export default function Debts() {
               </button>
             </div>
           </form>
+        </Modal>
+
+        {/* Payment History Modal */}
+        <Modal
+          isOpen={isHistoryModalOpen}
+          onClose={handleCloseHistoryModal}
+          title={`Payment History - ${selectedDebt?.creditor || ''}`}
+          maxWidth="max-w-2xl"
+        >
+          <div className="space-y-4">
+            {paymentHistory.length === 0 ? (
+              <div className="text-center py-8 text-dark-400">
+                No payment history yet
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {paymentHistory.map((payment: any, index: number) => (
+                  <div key={payment.id} className="bg-dark-800 p-4 rounded-lg border border-dark-700">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <p className="text-sm text-dark-400">Payment #{paymentHistory.length - index}</p>
+                        <p className="text-xs text-dark-500">{formatDate(payment.payment_date)}</p>
+                      </div>
+                      <p className="text-lg font-bold text-success">
+                        {formatCurrency(payment.amount)}
+                      </p>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-dark-400">Principal</p>
+                        <p className="font-semibold text-white">{formatCurrency(payment.principal_amount)}</p>
+                      </div>
+                      <div>
+                        <p className="text-dark-400">Interest</p>
+                        <p className="font-semibold text-warning">{formatCurrency(payment.interest_amount)}</p>
+                      </div>
+                      {payment.account_name && (
+                        <div>
+                          <p className="text-dark-400">Account</p>
+                          <p className="font-semibold text-white">{payment.account_name}</p>
+                        </div>
+                      )}
+                      {payment.transaction_id && (
+                        <div>
+                          <p className="text-dark-400">Transaction</p>
+                          <p className="font-semibold text-primary">#{payment.transaction_id}</p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {payment.notes && (
+                      <p className="text-sm text-dark-400 mt-3 pt-3 border-t border-dark-700">
+                        {payment.notes}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            <div className="flex justify-end pt-4">
+              <button onClick={handleCloseHistoryModal} className="btn btn-secondary">
+                Close
+              </button>
+            </div>
+          </div>
         </Modal>
       </div>
     </Layout>

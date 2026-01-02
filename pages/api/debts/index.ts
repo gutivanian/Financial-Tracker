@@ -64,12 +64,14 @@ async function handler(req: AuthRequest, res: NextApiResponse) {
         due_date,
         start_date,
         maturity_date,
+        payment_type,
         notes,
       } = req.body;
 
       // Support both field naming conventions
       const actualCreditor = creditor || creditor_name;
       const actualOriginalAmount = original_amount || principal_amount;
+      const actualPaymentType = payment_type || 'manual';
       let actualDueDate = payment_due_date || due_date;
 
       // Parse due_date if it's a string like "30th" -> 30 or just a number string
@@ -98,28 +100,55 @@ async function handler(req: AuthRequest, res: NextApiResponse) {
         });
       }
 
-      const query = `
-        INSERT INTO debts (
-          user_id, debt_type, creditor, original_amount, current_balance,
-          interest_rate, minimum_payment, payment_due_date, start_date, maturity_date
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        RETURNING *
-      `;
+      // Ensure "Debt Payment" category exists for this user
+      await dbQuery('BEGIN');
 
-      const result = await dbQuery(query, [
-        userId,
-        debt_type,
-        actualCreditor,
-        actualOriginalAmount,
-        current_balance,
-        interest_rate || null,
-        minimum_payment || null,
-        actualDueDate,
-        start_date || null,
-        maturity_date || null,
-      ]);
+      try {
+        const categoryCheck = await dbQuery(
+          `SELECT id FROM categories 
+           WHERE user_id = $1 AND name = 'Debt Payment' AND type = 'expense' 
+           LIMIT 1`,
+          [userId]
+        );
 
-      res.status(201).json(result.rows[0]);
+        if (categoryCheck.rows.length === 0) {
+          // Auto-create "Debt Payment" category
+          await dbQuery(
+            `INSERT INTO categories (user_id, name, type, icon, color, budget_type, is_active)
+             VALUES ($1, 'Debt Payment', 'expense', 'CreditCard', '#ef4444', 'needs', true)`,
+            [userId]
+          );
+        }
+
+        const query = `
+          INSERT INTO debts (
+            user_id, debt_type, creditor, original_amount, current_balance,
+            interest_rate, minimum_payment, payment_due_date, start_date, maturity_date, payment_type
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          RETURNING *
+        `;
+
+        const result = await dbQuery(query, [
+          userId,
+          debt_type,
+          actualCreditor,
+          actualOriginalAmount,
+          current_balance,
+          interest_rate || null,
+          minimum_payment || null,
+          actualDueDate,
+          start_date || null,
+          maturity_date || null,
+          actualPaymentType,
+        ]);
+
+        await dbQuery('COMMIT');
+
+        res.status(201).json(result.rows[0]);
+      } catch (error) {
+        await dbQuery('ROLLBACK');
+        throw error;
+      }
 
     } else if (req.method === 'PUT') {
       const { id } = req.query;

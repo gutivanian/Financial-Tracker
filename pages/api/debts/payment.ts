@@ -10,13 +10,13 @@ async function handler(req: AuthRequest, res: NextApiResponse) {
   }
 
   try {
-    const { debt_id, amount, payment_date, notes } = req.body;
+    const { debt_id, account_id, amount, payment_date, notes } = req.body;
 
     // Required fields validation
-    if (!debt_id || !amount || !payment_date) {
+    if (!debt_id || !account_id || !amount || !payment_date) {
       return res.status(400).json({ 
         message: 'Missing required fields',
-        required: ['debt_id', 'amount', 'payment_date']
+        required: ['debt_id', 'account_id', 'amount', 'payment_date']
       });
     }
 
@@ -30,9 +30,21 @@ async function handler(req: AuthRequest, res: NextApiResponse) {
       return res.status(404).json({ message: 'Debt not found' });
     }
 
+    // Verify account belongs to user
+    const accountCheck = await dbQuery(
+      'SELECT * FROM accounts WHERE id = $1 AND user_id = $2 AND is_active = true',
+      [account_id, userId]
+    );
+
+    if (accountCheck.rows.length === 0) {
+      return res.status(404).json({ message: 'Account not found or inactive' });
+    }
+
     const debt = debtCheck.rows[0];
+    const account = accountCheck.rows[0];
     const paymentAmount = parseFloat(amount);
     const currentBalance = parseFloat(debt.current_balance);
+    const accountBalance = parseFloat(account.balance);
     const interestRate = parseFloat(debt.interest_rate) || 0;
 
     // ============================================
@@ -110,16 +122,56 @@ async function handler(req: AuthRequest, res: NextApiResponse) {
     await dbQuery('BEGIN');
 
     try {
-      // 1. Insert payment record
-      const paymentResult = await dbQuery(
-        `INSERT INTO debt_payments (
-          debt_id, amount, payment_date, principal_amount, interest_amount, notes
-        ) VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING *`,
-        [debt_id, paymentAmount, payment_date, principalAmount, interestAmount, notes || null]
+      // 1. Get "Debt Payment" category ID
+      const categoryResult = await dbQuery(
+        `SELECT id FROM categories WHERE user_id = $1 AND name = 'Debt Payment' LIMIT 1`,
+        [userId]
       );
 
-      // 2. Update debt balance and status
+      if (categoryResult.rows.length === 0) {
+        await dbQuery('ROLLBACK');
+        return res.status(500).json({ 
+          message: 'Debt Payment category not found. Please contact support.' 
+        });
+      }
+
+      const debtPaymentCategoryId = categoryResult.rows[0].id;
+
+      // 2. Create transaction expense
+      const transactionResult = await dbQuery(
+        `INSERT INTO transactions (
+          user_id, account_id, category_id, type, amount, date, notes
+        ) VALUES ($1, $2, $3, 'expense', $4, $5, $6)
+        RETURNING id`,
+        [
+          userId, 
+          account_id, 
+          debtPaymentCategoryId, 
+          paymentAmount, 
+          payment_date, 
+          notes || `Debt payment for ${debt.creditor}`
+        ]
+      );
+
+      const transactionId = transactionResult.rows[0].id;
+
+      // 3. Update account balance
+      const newAccountBalance = accountBalance - paymentAmount;
+      await dbQuery(
+        `UPDATE accounts SET balance = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+        [newAccountBalance, account_id]
+      );
+
+      // 4. Insert payment record with transaction link
+      const paymentResult = await dbQuery(
+        `INSERT INTO debt_payments (
+          debt_id, account_id, transaction_id, amount, payment_date, principal_amount, interest_amount, notes
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING *`,
+        [debt_id, account_id, transactionId, paymentAmount, payment_date, principalAmount, interestAmount, notes || null]
+      );
+
+      // 5. Update debt balance and status
       await dbQuery(
         `UPDATE debts SET 
           current_balance = $1,
@@ -143,6 +195,8 @@ async function handler(req: AuthRequest, res: NextApiResponse) {
           : '✅ Payment recorded successfully',
         payment: {
           id: paymentResult.rows[0].id,
+          transaction_id: transactionId,
+          account_id: account_id,
           amount: paymentAmount,
           principal_amount: principalAmount,
           interest_amount: interestAmount,

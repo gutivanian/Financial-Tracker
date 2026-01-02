@@ -11,6 +11,7 @@ import {
   CreditCard,
   ArrowUpRight,
   ArrowDownRight,
+  AlertCircle,
 } from 'lucide-react';
 import {
   LineChart,
@@ -40,12 +41,23 @@ interface DashboardData {
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [debtWarnings, setDebtWarnings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('current_month');
 
   useEffect(() => {
     fetchDashboardData();
+    fetchDebtWarnings();
   }, [period]);
+
+  const fetchDebtWarnings = async () => {
+    try {
+      const result = await apiGet('/api/debts/warnings');
+      setDebtWarnings(result.warnings || []);
+    } catch (error) {
+      console.error('Error fetching debt warnings:', error);
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -130,6 +142,43 @@ export default function Dashboard() {
             <option value="year_to_date">Tahun Ini</option>
           </select>
         </div>
+
+        {/* Debt Warnings */}
+        {debtWarnings.length > 0 && (
+          <div className="bg-warning/10 border border-warning rounded-lg p-4">
+            <div className="flex items-start space-x-3">
+              <AlertCircle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-warning mb-2">⚠️ Peringatan Pembayaran Utang</h3>
+                <div className="space-y-2">
+                  {debtWarnings.map((debt: any) => (
+                    <div key={debt.id} className="bg-dark-800 rounded p-3 border border-dark-700">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-medium text-white">{debt.creditor}</p>
+                          <p className="text-sm text-dark-400 mt-1">
+                            Jatuh tempo: Tanggal {debt.payment_due_date} setiap bulan
+                          </p>
+                          <p className="text-xs text-warning mt-1">
+                            {debt.days_until_due === 0 
+                              ? '🔴 Hari ini!' 
+                              : debt.days_until_due === 1 
+                              ? '🟡 Besok' 
+                              : `🟡 ${debt.days_until_due} hari lagi`}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-dark-400">Minimum Payment</p>
+                          <p className="font-bold text-warning">{formatCurrency(debt.minimum_payment)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
