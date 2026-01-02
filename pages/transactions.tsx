@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
 import Modal from '@/components/Modal';
 import IconRenderer from '@/components/IconRenderer';
+import CategorySelect from '@/components/CategorySelect';
+import AccountSelect from '@/components/AccountSelect';
 import { Plus, Filter, Download, Search, ArrowUpRight, ArrowDownRight, Edit2, Trash2 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
@@ -518,38 +520,27 @@ export default function Transactions() {
                 <label className="block text-sm font-medium text-dark-400 mb-2">
                   Account
                 </label>
-                <select
+                <AccountSelect
+                  accounts={accounts}
                   value={formData.account_id}
-                  onChange={(e) => setFormData({ ...formData, account_id: e.target.value })}
-                  className="input w-full"
+                  onChange={(accountId) => setFormData({ ...formData, account_id: accountId })}
+                  placeholder="Select Account"
+                  formatBalance={formatCurrency}
                   required
-                >
-                  <option value="">Select Account</option>
-                  {accounts.map((acc) => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.name} ({formatCurrency(acc.balance)})
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-dark-400 mb-2">
                   Category
                 </label>
-                <select
+                <CategorySelect
+                  categories={getCategoriesByType(formData.type)}
                   value={formData.category_id}
-                  onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-                  className="input w-full"
+                  onChange={(categoryId) => setFormData({ ...formData, category_id: categoryId })}
+                  placeholder="Select Category"
                   required
-                >
-                  <option value="">Select Category</option>
-                  {getCategoriesByType(formData.type).map((cat: any) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.icon} {cat.name}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
             </div>
 
