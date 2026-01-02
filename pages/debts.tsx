@@ -45,7 +45,6 @@ export default function Debts() {
   const fetchAccounts = async () => {
     try {
       const data = await apiGet('/api/accounts');
-      console.log('Fetched accounts:', data); // Debug log
       // API returns array directly, not { accounts: [] }
       setAccounts(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -107,7 +106,6 @@ export default function Debts() {
   const handleOpenPaymentModal = (debt: any) => {
     setSelectedDebt(debt);
     const activeAccounts = accounts.filter(acc => acc.is_active);
-    console.log('Active accounts for payment:', activeAccounts); // Debug log
     setPaymentData({
       account_id: activeAccounts.length > 0 ? activeAccounts[0].id.toString() : '',
       amount: debt.minimum_payment || '',
@@ -718,9 +716,6 @@ export default function Debts() {
           maxWidth="max-w-md"
         >
           <form onSubmit={handlePaymentSubmit} className="space-y-4">
-            {/* Debug info */}
-            {console.log('Rendering payment modal, accounts:', accounts, 'paymentData:', paymentData)}
-            
             <div className="bg-dark-800 p-4 rounded-lg border border-dark-700">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm text-dark-400">Current Balance</span>
