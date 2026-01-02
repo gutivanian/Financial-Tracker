@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import Layout from '@/components/Layout';
 import Modal from '@/components/Modal';
 import IconRenderer from '@/components/IconRenderer';
+import CategorySelect from '@/components/CategorySelect';
 import { Plus, AlertTriangle, Edit2, Trash2 } from 'lucide-react';
 import { formatCurrency, formatPercentage } from '@/lib/utils';
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
@@ -57,7 +58,7 @@ export default function Budgets() {
     if (budget) {
       setEditingBudget(budget);
       setFormData({
-        category_id: budget.category_id,
+        category_id: budget.category_id?.toString() || '',
         amount: budget.amount,
         period: budget.period || 'monthly',
         budget_type: budget.budget_type || 'needs',
@@ -514,19 +515,13 @@ export default function Budgets() {
               <label className="block text-sm font-medium text-dark-400 mb-2">
                 Category
               </label>
-              <select
+              <CategorySelect
+                categories={getFilteredCategories()}
                 value={formData.category_id}
-                onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-                className="input w-full"
+                onChange={(categoryId) => setFormData({ ...formData, category_id: categoryId })}
+                placeholder="Select Category"
                 required
-              >
-                <option value="">Select Category</option>
-                {getFilteredCategories().map((cat: any) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.icon} {cat.name}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -289,37 +289,171 @@ async function handler(
       try {
         const oldTxnData = oldTxn.rows[0];
 
-        // Revert old transaction effects
-        if (oldTxnData.type === 'income' && oldTxnData.account_id) {
-          await dbQuery(
-            'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
-            [oldTxnData.amount, oldTxnData.account_id, userId]
+        // Calculate delta amounts
+        const oldAmount = parseFloat(oldTxnData.amount);
+        const newAmount = parseFloat(amount);
+        const amountDelta = newAmount - oldAmount;
+
+        const oldAdminFee = parseFloat(oldTxnData.admin_fee || 0);
+        const newAdminFee = parseFloat(admin_fee || 0);
+        const adminFeeDelta = newAdminFee - oldAdminFee;
+
+        // Check if transaction type, account, or significant fields changed
+        const typeChanged = oldTxnData.type !== type;
+        const accountChanged = oldTxnData.account_id !== account_id;
+        const toAccountChanged = oldTxnData.to_account_id !== to_account_id;
+        const amountChanged = amountDelta !== 0;
+        const adminFeeChanged = adminFeeDelta !== 0;
+
+        // Get Admin Fee category if needed
+        let adminFeeCategoryId = null;
+        if ((oldTxnData.type === 'transfer' || type === 'transfer') && (oldAdminFee > 0 || newAdminFee > 0)) {
+          const adminFeeCatResult = await dbQuery(
+            `SELECT id FROM categories WHERE user_id = $1 AND name = 'Admin Fee' AND type = 'expense' LIMIT 1`,
+            [userId]
           );
-        } else if (oldTxnData.type === 'expense' && oldTxnData.account_id) {
-          await dbQuery(
-            'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
-            [oldTxnData.amount, oldTxnData.account_id, userId]
+          if (adminFeeCatResult.rows.length > 0) {
+            adminFeeCategoryId = adminFeeCatResult.rows[0].id;
+          }
+        }
+
+        // Find existing admin fee transaction if this is/was a transfer
+        let existingAdminFeeTransaction = null;
+        if (oldTxnData.type === 'transfer' && oldAdminFee > 0 && adminFeeCategoryId) {
+          const adminFeeTxnResult = await dbQuery(
+            `SELECT * FROM transactions 
+             WHERE user_id = $1 
+             AND account_id = $2 
+             AND category_id = $3 
+             AND type = 'expense'
+             AND amount = $4
+             AND date = $5
+             AND notes LIKE '%transfer transaction ID: ' || $6 || '%'
+             LIMIT 1`,
+            [userId, oldTxnData.account_id, adminFeeCategoryId, oldAdminFee, oldTxnData.date, id]
           );
-        } else if (oldTxnData.type === 'transfer') {
-          // Revert transfer
-          if (oldTxnData.account_id) {
+          if (adminFeeTxnResult.rows.length > 0) {
+            existingAdminFeeTransaction = adminFeeTxnResult.rows[0];
+          }
+        }
+
+        // If type, account, or to_account changed, do full revert and apply
+        if (typeChanged || accountChanged || toAccountChanged) {
+          // Revert old transaction effects completely
+          if (oldTxnData.type === 'income' && oldTxnData.account_id) {
+            await dbQuery(
+              'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+              [oldTxnData.amount, oldTxnData.account_id, userId]
+            );
+          } else if (oldTxnData.type === 'expense' && oldTxnData.account_id) {
             await dbQuery(
               'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
               [oldTxnData.amount, oldTxnData.account_id, userId]
             );
+          } else if (oldTxnData.type === 'transfer') {
+            if (oldTxnData.account_id) {
+              await dbQuery(
+                'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                [oldTxnData.amount, oldTxnData.account_id, userId]
+              );
+            }
+            if (oldTxnData.to_account_id) {
+              await dbQuery(
+                'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                [oldTxnData.amount, oldTxnData.to_account_id, userId]
+              );
+            }
+            // Delete old admin fee transaction if exists
+            if (existingAdminFeeTransaction) {
+              await dbQuery(
+                'DELETE FROM transactions WHERE id = $1',
+                [existingAdminFeeTransaction.id]
+              );
+              // Balance already adjusted by the deletion
+              await dbQuery(
+                'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                [oldAdminFee, oldTxnData.account_id, userId]
+              );
+            }
           }
-          if (oldTxnData.to_account_id) {
-            await dbQuery(
-              'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
-              [oldTxnData.amount, oldTxnData.to_account_id, userId]
-            );
+        } else {
+          // Only amount changed, update by delta
+          if (amountChanged) {
+            if (type === 'income' && account_id) {
+              // For income: if amount increased, add delta; if decreased, subtract delta
+              await dbQuery(
+                'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                [amountDelta, account_id, userId]
+              );
+            } else if (type === 'expense' && account_id) {
+              // For expense: if amount increased, subtract delta; if decreased, add delta
+              await dbQuery(
+                'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                [amountDelta, account_id, userId]
+              );
+            } else if (type === 'transfer' && account_id && to_account_id) {
+              // For transfer: update both accounts by delta
+              await dbQuery(
+                'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                [amountDelta, account_id, userId]
+              );
+              await dbQuery(
+                'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                [amountDelta, to_account_id, userId]
+              );
+            }
           }
-          // Revert admin fee if exists
-          if (oldTxnData.admin_fee && parseFloat(oldTxnData.admin_fee) > 0 && oldTxnData.account_id) {
-            await dbQuery(
-              'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
-              [oldTxnData.admin_fee, oldTxnData.account_id, userId]
-            );
+
+          // Handle admin fee changes for transfer
+          if (type === 'transfer' && adminFeeChanged && account_id && adminFeeCategoryId) {
+            if (existingAdminFeeTransaction) {
+              // Update existing admin fee transaction
+              if (newAdminFee > 0) {
+                // Update the amount
+                await dbQuery(
+                  'UPDATE transactions SET amount = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+                  [newAdminFee, existingAdminFeeTransaction.id]
+                );
+                // Update account balance by delta
+                await dbQuery(
+                  'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                  [adminFeeDelta, account_id, userId]
+                );
+              } else {
+                // Delete admin fee transaction if new fee is 0
+                await dbQuery(
+                  'DELETE FROM transactions WHERE id = $1',
+                  [existingAdminFeeTransaction.id]
+                );
+                // Refund the old admin fee
+                await dbQuery(
+                  'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                  [oldAdminFee, account_id, userId]
+                );
+              }
+            } else if (newAdminFee > 0) {
+              // Create new admin fee transaction
+              await dbQuery(
+                `INSERT INTO transactions (
+                  user_id, account_id, category_id, type, amount, date,
+                  description, notes
+                ) VALUES ($1, $2, $3, 'expense', $4, $5, $6, $7)`,
+                [
+                  userId,
+                  account_id,
+                  adminFeeCategoryId,
+                  newAdminFee,
+                  date,
+                  `Admin fee for transfer to ${to_account_id}`,
+                  `Auto-generated admin fee for transfer transaction ID: ${id}`
+                ]
+              );
+              // Deduct new admin fee from account
+              await dbQuery(
+                'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                [newAdminFee, account_id, userId]
+              );
+            }
           }
         }
 
@@ -360,34 +494,49 @@ async function handler(
 
         const result = await dbQuery(updateQuery, params);
 
-        // Apply new transaction effects
-        if (type === 'income' && account_id) {
-          await dbQuery(
-            'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
-            [amount, account_id, userId]
-          );
-        } else if (type === 'expense' && account_id) {
-          await dbQuery(
-            'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
-            [amount, account_id, userId]
-          );
-        } else if (type === 'transfer' && account_id && to_account_id) {
-          // Apply transfer
-          await dbQuery(
-            'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
-            [amount, account_id, userId]
-          );
-          await dbQuery(
-            'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
-            [amount, to_account_id, userId]
-          );
-
-          // Apply admin fee if exists
-          if (admin_fee && parseFloat(admin_fee) > 0) {
+        // If type or account changed, apply new transaction effects
+        if (typeChanged || accountChanged || toAccountChanged) {
+          if (type === 'income' && account_id) {
+            await dbQuery(
+              'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+              [amount, account_id, userId]
+            );
+          } else if (type === 'expense' && account_id) {
             await dbQuery(
               'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
-              [admin_fee, account_id, userId]
+              [amount, account_id, userId]
             );
+          } else if (type === 'transfer' && account_id && to_account_id) {
+            await dbQuery(
+              'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+              [amount, account_id, userId]
+            );
+            await dbQuery(
+              'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+              [amount, to_account_id, userId]
+            );
+            // Create new admin fee transaction if needed
+            if (newAdminFee > 0 && adminFeeCategoryId) {
+              await dbQuery(
+                `INSERT INTO transactions (
+                  user_id, account_id, category_id, type, amount, date,
+                  description, notes
+                ) VALUES ($1, $2, $3, 'expense', $4, $5, $6, $7)`,
+                [
+                  userId,
+                  account_id,
+                  adminFeeCategoryId,
+                  newAdminFee,
+                  date,
+                  `Admin fee for transfer to ${to_account_id}`,
+                  `Auto-generated admin fee for transfer transaction ID: ${id}`
+                ]
+              );
+              await dbQuery(
+                'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                [newAdminFee, account_id, userId]
+              );
+            }
           }
         }
 
@@ -420,7 +569,32 @@ async function handler(
       try {
         const txnData = txn.rows[0];
 
-        // Delete transaction
+        // If this is a transfer with admin fee, find and delete the admin fee transaction
+        if (txnData.type === 'transfer' && txnData.admin_fee && parseFloat(txnData.admin_fee) > 0) {
+          // Get Admin Fee category
+          const adminFeeCatResult = await dbQuery(
+            `SELECT id FROM categories WHERE user_id = $1 AND name = 'Admin Fee' AND type = 'expense' LIMIT 1`,
+            [userId]
+          );
+          
+          if (adminFeeCatResult.rows.length > 0) {
+            const adminFeeCategoryId = adminFeeCatResult.rows[0].id;
+            
+            // Find and delete the admin fee transaction
+            await dbQuery(
+              `DELETE FROM transactions 
+               WHERE user_id = $1 
+               AND account_id = $2 
+               AND category_id = $3 
+               AND type = 'expense'
+               AND amount = $4
+               AND notes LIKE '%transfer transaction ID: ' || $5 || '%'`,
+              [userId, txnData.account_id, adminFeeCategoryId, txnData.admin_fee, id]
+            );
+          }
+        }
+
+        // Delete main transaction
         await dbQuery(
           'DELETE FROM transactions WHERE id = $1 AND user_id = $2',
           [id, userId]
@@ -451,7 +625,7 @@ async function handler(
               [txnData.amount, txnData.to_account_id, userId]
             );
           }
-          // Revert admin fee if exists
+          // Revert admin fee (balance already restored by deleting admin fee transaction)
           if (txnData.admin_fee && parseFloat(txnData.admin_fee) > 0 && txnData.account_id) {
             await dbQuery(
               'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
