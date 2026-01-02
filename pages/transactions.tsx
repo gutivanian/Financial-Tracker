@@ -5,7 +5,7 @@ import Modal from '@/components/Modal';
 import IconRenderer from '@/components/IconRenderer';
 import CategorySelect from '@/components/CategorySelect';
 import AccountSelect from '@/components/AccountSelect';
-import { Plus, Filter, Download, Search, ArrowUpRight, ArrowDownRight, Edit2, Trash2, ArrowRightLeft } from 'lucide-react';
+import { Plus, Filter, Download, Search, ArrowUpRight, ArrowDownRight, Edit2, Trash2, ArrowRightLeft, RefreshCw } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
 
@@ -217,6 +217,59 @@ export default function Transactions() {
     return [];
   };
 
+  const getTransactionStyle = (type: string) => {
+    switch (type) {
+      case 'income':
+        return {
+          bgClass: 'bg-success/20',
+          textClass: 'text-success',
+          icon: <ArrowUpRight className="w-5 h-5 text-success" />,
+          iconDesktop: <ArrowUpRight className="w-6 h-6 text-success" />,
+          prefix: '+'
+        };
+      case 'expense':
+        return {
+          bgClass: 'bg-danger/20',
+          textClass: 'text-danger',
+          icon: <ArrowDownRight className="w-5 h-5 text-danger" />,
+          iconDesktop: <ArrowDownRight className="w-6 h-6 text-danger" />,
+          prefix: '-'
+        };
+      case 'transfer':
+        return {
+          bgClass: 'bg-primary-600/20',
+          textClass: 'text-primary-400',
+          icon: <ArrowRightLeft className="w-5 h-5 text-primary-400" />,
+          iconDesktop: <ArrowRightLeft className="w-6 h-6 text-primary-400" />,
+          prefix: '↔ '
+        };
+      case 'adjustment_in':
+        return {
+          bgClass: 'bg-info/20',
+          textClass: 'text-info',
+          icon: <RefreshCw className="w-5 h-5 text-info" />,
+          iconDesktop: <RefreshCw className="w-6 h-6 text-info" />,
+          prefix: '+'
+        };
+      case 'adjustment_out':
+        return {
+          bgClass: 'bg-warning/20',
+          textClass: 'text-warning',
+          icon: <RefreshCw className="w-5 h-5 text-warning" />,
+          iconDesktop: <RefreshCw className="w-6 h-6 text-warning" />,
+          prefix: '-'
+        };
+      default:
+        return {
+          bgClass: 'bg-dark-700',
+          textClass: 'text-dark-400',
+          icon: <ArrowDownRight className="w-5 h-5 text-dark-400" />,
+          iconDesktop: <ArrowDownRight className="w-6 h-6 text-dark-400" />,
+          prefix: ''
+        };
+    }
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -316,6 +369,8 @@ export default function Transactions() {
                 <option value="income">Income</option>
                 <option value="expense">Expense</option>
                 <option value="transfer">Transfer</option>
+                <option value="adjustment_in">Adjustment In</option>
+                <option value="adjustment_out">Adjustment Out</option>
               </select>
             </div>
             <div>
@@ -389,32 +444,32 @@ export default function Transactions() {
                     {/* Header with Icon & Info */}
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start space-x-3 flex-1 min-w-0">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                          txn.type === 'income' ? 'bg-success/20' : 
-                          txn.type === 'transfer' ? 'bg-primary-600/20' : 
-                          'bg-danger/20'
-                        }`}>
-                          {txn.type === 'income' ? (
-                            <ArrowUpRight className="w-5 h-5 text-success" />
-                          ) : txn.type === 'transfer' ? (
-                            <ArrowRightLeft className="w-5 h-5 text-primary-400" />
-                          ) : (
-                            <ArrowDownRight className="w-5 h-5 text-danger" />
-                          )}
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${getTransactionStyle(txn.type).bgClass}`}>
+                          {getTransactionStyle(txn.type).icon}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-white text-sm truncate">
                             {txn.type === 'transfer' 
                               ? `Transfer: ${txn.account_name} → ${txn.to_account_name}`
+                              : txn.type === 'adjustment_in' || txn.type === 'adjustment_out'
+                              ? txn.description
                               : (txn.description || txn.category_name)
                             }
                           </p>
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-dark-400 mt-1">
-                            {txn.type !== 'transfer' && (
+                            {txn.type !== 'transfer' && txn.type !== 'adjustment_in' && txn.type !== 'adjustment_out' && txn.category_name && (
                               <>
                                 <span className="flex items-center space-x-1">
                                   <IconRenderer iconName={txn.category_icon} className="w-4 h-4" fallbackEmoji="📊" />
                                   <span>{txn.category_name}</span>
+                                </span>
+                                <span className="text-dark-600">•</span>
+                              </>
+                            )}
+                            {(txn.type === 'adjustment_in' || txn.type === 'adjustment_out') && (
+                              <>
+                                <span className={`text-xs px-2 py-0.5 rounded ${txn.type === 'adjustment_in' ? 'bg-info/20 text-info' : 'bg-warning/20 text-warning'}`}>
+                                  {txn.type === 'adjustment_in' ? 'Adjustment In' : 'Adjustment Out'}
                                 </span>
                                 <span className="text-dark-600">•</span>
                               </>
@@ -457,16 +512,12 @@ export default function Transactions() {
                     
                     {/* Amount & Date */}
                     <div className="bg-dark-900/50 p-2 rounded">
-                      <p className={`font-bold break-words ${
-                        txn.type === 'income' ? 'text-success' : 
-                        txn.type === 'transfer' ? 'text-primary-400' :
-                        'text-danger'
-                      } ${
+                      <p className={`font-bold break-words ${getTransactionStyle(txn.type).textClass} ${
                         formatCurrency(txn.amount).length > 15 ? 'text-base' :
                         formatCurrency(txn.amount).length > 12 ? 'text-lg' :
                         'text-xl'
                       }`}>
-                        {txn.type === 'income' ? '+' : txn.type === 'transfer' ? '↔ ' : '-'}
+                        {getTransactionStyle(txn.type).prefix}
                         {formatCurrency(txn.amount)}
                       </p>
                       <p className="text-xs text-dark-400 mt-1">{formatDate(txn.date)}</p>
@@ -476,32 +527,32 @@ export default function Transactions() {
                   {/* Desktop Layout */}
                   <div className="hidden lg:flex items-center justify-between">
                     <div className="flex items-center space-x-4 flex-1">
-                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                        txn.type === 'income' ? 'bg-success/20' : 
-                        txn.type === 'transfer' ? 'bg-primary-600/20' : 
-                        'bg-danger/20'
-                      }`}>
-                        {txn.type === 'income' ? (
-                          <ArrowUpRight className="w-6 h-6 text-success" />
-                        ) : txn.type === 'transfer' ? (
-                          <ArrowRightLeft className="w-6 h-6 text-primary-400" />
-                        ) : (
-                          <ArrowDownRight className="w-6 h-6 text-danger" />
-                        )}
+                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${getTransactionStyle(txn.type).bgClass}`}>
+                        {getTransactionStyle(txn.type).iconDesktop}
                       </div>
                       <div className="flex-1">
                         <p className="font-medium text-white">
                           {txn.type === 'transfer' 
                             ? `Transfer: ${txn.account_name} → ${txn.to_account_name}`
+                            : txn.type === 'adjustment_in' || txn.type === 'adjustment_out'
+                            ? txn.description
                             : (txn.description || txn.category_name)
                           }
                         </p>
                         <div className="flex items-center space-x-2 text-sm text-dark-400 mt-1">
-                          {txn.type !== 'transfer' && (
+                          {txn.type !== 'transfer' && txn.type !== 'adjustment_in' && txn.type !== 'adjustment_out' && txn.category_name && (
                             <>
                               <span className="flex items-center space-x-1">
                                 <IconRenderer iconName={txn.category_icon} className="w-4 h-4" fallbackEmoji="📊" />
                                 <span>{txn.category_name}</span>
+                              </span>
+                              <span>•</span>
+                            </>
+                          )}
+                          {(txn.type === 'adjustment_in' || txn.type === 'adjustment_out') && (
+                            <>
+                              <span className={`text-xs px-2 py-0.5 rounded ${txn.type === 'adjustment_in' ? 'bg-info/20 text-info' : 'bg-warning/20 text-warning'}`}>
+                                {txn.type === 'adjustment_in' ? 'Adjustment In' : 'Adjustment Out'}
                               </span>
                               <span>•</span>
                             </>
@@ -524,12 +575,8 @@ export default function Transactions() {
                     </div>
                     <div className="flex items-center space-x-4">
                       <div className="text-right">
-                        <p className={`font-bold text-lg ${
-                          txn.type === 'income' ? 'text-success' : 
-                          txn.type === 'transfer' ? 'text-primary-400' :
-                          'text-danger'
-                        }`}>
-                          {txn.type === 'income' ? '+' : txn.type === 'transfer' ? '↔ ' : '-'}
+                        <p className={`font-bold text-lg ${getTransactionStyle(txn.type).textClass}`}>
+                          {getTransactionStyle(txn.type).prefix}
                           {formatCurrency(txn.amount)}
                         </p>
                         <p className="text-sm text-dark-400 mt-1">{formatDate(txn.date)}</p>
@@ -585,7 +632,7 @@ export default function Transactions() {
               <label className="block text-sm font-medium text-dark-400 mb-2">
                 Type
               </label>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-3 mb-3">
                 <button
                   type="button"
                   onClick={() => setFormData({ ...formData, type: 'income', to_account_id: '', admin_fee: '' })}
@@ -621,6 +668,32 @@ export default function Transactions() {
                 >
                   <ArrowRightLeft className="w-6 h-6 mx-auto mb-2" />
                   <span className="font-medium text-sm">Transfer</span>
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, type: 'adjustment_in', to_account_id: '', admin_fee: '', category_id: '' })}
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    formData.type === 'adjustment_in'
+                      ? 'border-info bg-info/10 text-info'
+                      : 'border-dark-700 bg-dark-800 text-dark-400 hover:border-dark-600'
+                  }`}
+                >
+                  <Plus className="w-5 h-5 mx-auto mb-1" />
+                  <span className="font-medium text-xs">Adjustment In</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, type: 'adjustment_out', to_account_id: '', admin_fee: '', category_id: '' })}
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    formData.type === 'adjustment_out'
+                      ? 'border-warning bg-warning/10 text-warning'
+                      : 'border-dark-700 bg-dark-800 text-dark-400 hover:border-dark-600'
+                  }`}
+                >
+                  <ArrowDownRight className="w-5 h-5 mx-auto mb-1" />
+                  <span className="font-medium text-xs">Adjustment Out</span>
                 </button>
               </div>
             </div>
@@ -749,13 +822,13 @@ export default function Transactions() {
                   )}
                 </div>
               </>
-            ) : (
-              // Income/Expense fields
+            ) : formData.type === 'adjustment_in' || formData.type === 'adjustment_out' ? (
+              // Adjustment fields (no category needed)
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-dark-400 mb-2">
-                      Account
+                      Account <span className="text-danger">*</span>
                     </label>
                     <AccountSelect
                       accounts={accounts}
@@ -769,7 +842,96 @@ export default function Transactions() {
 
                   <div>
                     <label className="block text-sm font-medium text-dark-400 mb-2">
-                      Category
+                      Amount <span className="text-danger">*</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-dark-400">
+                        Rp
+                      </span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formData.amount}
+                        onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                        className="input w-full pl-12"
+                        placeholder="0.00"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-dark-400 mb-2">
+                    Date <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.date}
+                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                    className="input w-full"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-dark-400 mb-2">
+                    Description <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    className="input w-full"
+                    placeholder="e.g., Balance correction from bank statement"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-dark-400 mb-2">
+                    Notes (Optional)
+                  </label>
+                  <textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    className="input w-full"
+                    rows={3}
+                    placeholder="Reason for adjustment..."
+                  />
+                </div>
+
+                <div className="bg-info/10 border border-info/20 rounded-lg p-3">
+                  <p className="text-sm text-info">
+                    💡 <strong>Adjustment {formData.type === 'adjustment_in' ? 'In' : 'Out'}:</strong> {
+                      formData.type === 'adjustment_in' 
+                        ? 'Menambah saldo akun (koreksi positif)'
+                        : 'Mengurangi saldo akun (koreksi negatif)'
+                    }
+                  </p>
+                </div>
+              </>
+            ) : (
+              // Income/Expense fields
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-dark-400 mb-2">
+                      Account <span className="text-danger">*</span>
+                    </label>
+                    <AccountSelect
+                      accounts={accounts}
+                      value={formData.account_id}
+                      onChange={(accountId) => setFormData({ ...formData, account_id: accountId })}
+                      placeholder="Select Account"
+                      formatBalance={formatCurrency}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-dark-400 mb-2">
+                      Category <span className="text-danger">*</span>
                     </label>
                     <CategorySelect
                       categories={getCategoriesByType(formData.type)}
@@ -784,7 +946,7 @@ export default function Transactions() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-dark-400 mb-2">
-                      Amount
+                      Amount <span className="text-danger">*</span>
                     </label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-dark-400">
@@ -804,7 +966,7 @@ export default function Transactions() {
 
                   <div>
                     <label className="block text-sm font-medium text-dark-400 mb-2">
-                      Date
+                      Date <span className="text-danger">*</span>
                     </label>
                     <input
                       type="date"
@@ -818,7 +980,7 @@ export default function Transactions() {
 
                 <div>
                   <label className="block text-sm font-medium text-dark-400 mb-2">
-                    Description
+                    Description (Optional)
                   </label>
                   <input
                     type="text"

@@ -189,6 +189,18 @@ async function handler(
             'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
             [amount, account_id, userId]
           );
+        } else if (type === 'adjustment_in' && account_id) {
+          // Adjustment In: add to account (balance correction)
+          await dbQuery(
+            'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+            [amount, account_id, userId]
+          );
+        } else if (type === 'adjustment_out' && account_id) {
+          // Adjustment Out: subtract from account (balance correction)
+          await dbQuery(
+            'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+            [amount, account_id, userId]
+          );
         } else if (type === 'transfer' && account_id && to_account_id) {
           // Transfer: subtract from source, add to destination
           await dbQuery(
@@ -350,6 +362,16 @@ async function handler(
               'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
               [oldTxnData.amount, oldTxnData.account_id, userId]
             );
+          } else if (oldTxnData.type === 'adjustment_in' && oldTxnData.account_id) {
+            await dbQuery(
+              'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+              [oldTxnData.amount, oldTxnData.account_id, userId]
+            );
+          } else if (oldTxnData.type === 'adjustment_out' && oldTxnData.account_id) {
+            await dbQuery(
+              'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+              [oldTxnData.amount, oldTxnData.account_id, userId]
+            );
           } else if (oldTxnData.type === 'transfer') {
             if (oldTxnData.account_id) {
               await dbQuery(
@@ -387,6 +409,18 @@ async function handler(
               );
             } else if (type === 'expense' && account_id) {
               // For expense: if amount increased, subtract delta; if decreased, add delta
+              await dbQuery(
+                'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                [amountDelta, account_id, userId]
+              );
+            } else if (type === 'adjustment_in' && account_id) {
+              // For adjustment in: if amount increased, add delta; if decreased, subtract delta
+              await dbQuery(
+                'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                [amountDelta, account_id, userId]
+              );
+            } else if (type === 'adjustment_out' && account_id) {
+              // For adjustment out: if amount increased, subtract delta; if decreased, add delta
               await dbQuery(
                 'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
                 [amountDelta, account_id, userId]
@@ -506,6 +540,16 @@ async function handler(
               'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
               [amount, account_id, userId]
             );
+          } else if (type === 'adjustment_in' && account_id) {
+            await dbQuery(
+              'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+              [amount, account_id, userId]
+            );
+          } else if (type === 'adjustment_out' && account_id) {
+            await dbQuery(
+              'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+              [amount, account_id, userId]
+            );
           } else if (type === 'transfer' && account_id && to_account_id) {
             await dbQuery(
               'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
@@ -607,6 +651,16 @@ async function handler(
             [txnData.amount, txnData.account_id, userId]
           );
         } else if (txnData.type === 'expense' && txnData.account_id) {
+          await dbQuery(
+            'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+            [txnData.amount, txnData.account_id, userId]
+          );
+        } else if (txnData.type === 'adjustment_in' && txnData.account_id) {
+          await dbQuery(
+            'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+            [txnData.amount, txnData.account_id, userId]
+          );
+        } else if (txnData.type === 'adjustment_out' && txnData.account_id) {
           await dbQuery(
             'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
             [txnData.amount, txnData.account_id, userId]
