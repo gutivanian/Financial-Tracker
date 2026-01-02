@@ -40,6 +40,7 @@ export interface Transaction {
   id: number;
   user_id: number;
   account_id?: number;
+  to_account_id?: number;
   category_id?: number;
   type: 'income' | 'expense' | 'transfer';
   amount: number;
@@ -51,10 +52,12 @@ export interface Transaction {
   is_recurring: boolean;
   recurring_id?: number;
   receipt_url?: string;
+  admin_fee?: number;
   created_at: Date;
   updated_at: Date;
   // Joined fields
   account_name?: string;
+  to_account_name?: string;
   category_name?: string;
   category_icon?: string;
   category_color?: string;

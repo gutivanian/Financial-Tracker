@@ -1,0 +1,181 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - link "FinanceApp Personal Finance Tracker" [ref=e6] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e7]:
+          - img [ref=e9]
+          - generic [ref=e13]:
+            - heading "FinanceApp" [level=1] [ref=e14]
+            - paragraph [ref=e15]: Personal Finance Tracker
+      - navigation [ref=e16]:
+        - generic [ref=e17]:
+          - heading "Main Menu" [level=3] [ref=e19]
+          - generic [ref=e20]:
+            - link "Dashboard" [ref=e21] [cursor=pointer]:
+              - /url: /
+              - generic [ref=e22]:
+                - img [ref=e23]
+                - generic [ref=e28]: Dashboard
+            - link "Reports" [ref=e29] [cursor=pointer]:
+              - /url: /reports
+              - generic [ref=e30]:
+                - img [ref=e31]
+                - generic [ref=e33]: Reports
+            - link "Transaksi" [ref=e34] [cursor=pointer]:
+              - /url: /transactions
+              - generic [ref=e35]:
+                - img [ref=e36]
+                - generic [ref=e39]: Transaksi
+              - img [ref=e40]
+            - link "Akun & Rekening" [ref=e42] [cursor=pointer]:
+              - /url: /accounts
+              - generic [ref=e43]:
+                - img [ref=e44]
+                - generic [ref=e48]: Akun & Rekening
+        - generic [ref=e49]:
+          - heading "Planning & Goals" [level=3] [ref=e51]
+          - generic [ref=e52]:
+            - link "Budget" [ref=e53] [cursor=pointer]:
+              - /url: /budgets
+              - generic [ref=e54]:
+                - img [ref=e55]
+                - generic [ref=e58]: Budget
+            - link "Financial Goals" [ref=e59] [cursor=pointer]:
+              - /url: /goals
+              - generic [ref=e60]:
+                - img [ref=e61]
+                - generic [ref=e65]: Financial Goals
+        - generic [ref=e66]:
+          - heading "Investments & Debts" [level=3] [ref=e68]
+          - generic [ref=e69]:
+            - link "Investasi" [ref=e70] [cursor=pointer]:
+              - /url: /investments
+              - generic [ref=e71]:
+                - img [ref=e72]
+                - generic [ref=e75]: Investasi
+            - link "Hutang" [ref=e76] [cursor=pointer]:
+              - /url: /debts
+              - generic [ref=e77]:
+                - img [ref=e78]
+                - generic [ref=e80]: Hutang
+        - generic [ref=e81]:
+          - heading "Master Data" [level=3] [ref=e83]
+          - generic [ref=e84]:
+            - link "Kategori" [ref=e85] [cursor=pointer]:
+              - /url: /categories
+              - generic [ref=e86]:
+                - img [ref=e87]
+                - generic [ref=e89]: Kategori
+            - link "Instrumen" [ref=e90] [cursor=pointer]:
+              - /url: /instruments
+              - generic [ref=e91]:
+                - img [ref=e92]
+                - generic [ref=e96]: Instrumen
+      - generic [ref=e98]:
+        - generic [ref=e99]:
+          - generic [ref=e101]: TE
+          - generic [ref=e102]:
+            - paragraph [ref=e103]: test
+            - paragraph [ref=e104]: test@finance.com
+        - button "Keluar" [ref=e105] [cursor=pointer]:
+          - img [ref=e106]
+          - generic [ref=e109]: Keluar
+    - main [ref=e110]:
+      - generic [ref=e112]:
+        - generic [ref=e113]:
+          - generic [ref=e114]:
+            - heading "Transaksi" [level=1] [ref=e115]
+            - paragraph [ref=e116]: Kelola semua transaksi keuangan kamu
+          - button "Tambah Transaksi" [ref=e117] [cursor=pointer]:
+            - img [ref=e118]
+            - generic [ref=e119]: Tambah Transaksi
+        - generic [ref=e120]:
+          - generic [ref=e121]:
+            - generic [ref=e122]:
+              - paragraph [ref=e123]: Total Income
+              - img [ref=e125]
+            - heading "Rp 0" [level=3] [ref=e128]
+          - generic [ref=e129]:
+            - generic [ref=e130]:
+              - paragraph [ref=e131]: Total Expense
+              - img [ref=e133]
+            - heading "Rp 2.500" [level=3] [ref=e136]
+          - generic [ref=e137]:
+            - generic [ref=e138]:
+              - paragraph [ref=e139]: Net Balance
+              - generic [ref=e141]: 📉
+            - heading "-Rp 2.500" [level=3] [ref=e142]
+        - generic [ref=e143]:
+          - generic [ref=e144]:
+            - generic [ref=e145]:
+              - generic [ref=e146]: Search
+              - generic [ref=e147]:
+                - img [ref=e148]
+                - textbox "Cari transaksi..." [ref=e151]
+            - generic [ref=e152]:
+              - generic [ref=e153]: Type
+              - combobox [ref=e154]:
+                - option "Semua" [selected]
+                - option "Income"
+                - option "Expense"
+                - option "Transfer"
+            - generic [ref=e155]:
+              - generic [ref=e156]: Start Date
+              - textbox [ref=e157]
+            - generic [ref=e158]:
+              - generic [ref=e159]: End Date
+              - textbox [ref=e160]
+          - generic [ref=e161]:
+            - button "Apply Filters" [ref=e162] [cursor=pointer]
+            - button "Reset" [ref=e163] [cursor=pointer]
+        - generic [ref=e164]:
+          - generic [ref=e165]:
+            - heading "All Transactions (2)" [level=2] [ref=e166]
+            - button "Export" [ref=e167] [cursor=pointer]:
+              - img [ref=e168]
+              - generic [ref=e171]: Export
+          - generic [ref=e172]:
+            - generic [ref=e174]:
+              - generic [ref=e175]:
+                - img [ref=e177]
+                - generic [ref=e180]:
+                  - paragraph [ref=e181]: "Transfer: Test BCA → Test Mandiri"
+                  - generic [ref=e182]:
+                    - generic [ref=e183]: Test BCA
+                    - generic [ref=e184]: •
+                    - generic [ref=e185]: "Fee: Rp 2.500"
+              - generic [ref=e186]:
+                - generic [ref=e187]:
+                  - paragraph [ref=e188]: ↔ Rp 100.000
+                  - paragraph [ref=e189]: 2 Jan 2026
+                - generic [ref=e190]:
+                  - button "Edit" [ref=e191] [cursor=pointer]:
+                    - img [ref=e192]
+                  - button "Delete" [ref=e194] [cursor=pointer]:
+                    - img [ref=e195]
+            - generic [ref=e199]:
+              - generic [ref=e200]:
+                - img [ref=e202]
+                - generic [ref=e205]:
+                  - paragraph [ref=e206]: Admin fee for transfer to 11
+                  - generic [ref=e207]:
+                    - generic [ref=e208]:
+                      - img [ref=e209]
+                      - generic [ref=e211]: Admin Fee
+                    - generic [ref=e212]: •
+                    - generic [ref=e213]: Test BCA
+              - generic [ref=e214]:
+                - generic [ref=e215]:
+                  - paragraph [ref=e216]: "-Rp 2.500"
+                  - paragraph [ref=e217]: 2 Jan 2026
+                - generic [ref=e218]:
+                  - button "Edit" [ref=e219] [cursor=pointer]:
+                    - img [ref=e220]
+                  - button "Delete" [ref=e222] [cursor=pointer]:
+                    - img [ref=e223]
+  - alert [ref=e226]
+```

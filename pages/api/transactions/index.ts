@@ -28,10 +28,12 @@ async function handler(
           a.name as account_name,
           c.name as category_name,
           c.icon as category_icon,
-          c.color as category_color
+          c.color as category_color,
+          ta.name as to_account_name
         FROM transactions t
         LEFT JOIN accounts a ON t.account_id = a.id
         LEFT JOIN categories c ON t.category_id = c.id
+        LEFT JOIN accounts ta ON t.to_account_id = ta.id
         WHERE t.user_id = $1
       `;
       
@@ -117,6 +119,7 @@ async function handler(
     } else if (req.method === 'POST') {
       const {
         account_id,
+        to_account_id,
         category_id,
         type,
         amount,
@@ -125,6 +128,7 @@ async function handler(
         notes,
         merchant,
         tags,
+        admin_fee,
       } = req.body;
 
       // Validate required fields
@@ -132,44 +136,122 @@ async function handler(
         return res.status(400).json({ message: 'Missing required fields' });
       }
 
-      const query = `
-        INSERT INTO transactions (
-          user_id, account_id, category_id, type, amount, date,
-          description, notes, merchant, tags
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        RETURNING *
-      `;
-
-      const params = [
-        userId,
-        account_id || null,
-        category_id || null,
-        type,
-        amount,
-        date,
-        description || null,
-        notes || null,
-        merchant || null,
-        tags || null,
-      ];
-
-      const result = await dbQuery(query, params);
-
-      // Update account balance
-      if (account_id) {
-        const balanceChange = type === 'income' ? amount : -amount;
-        await dbQuery(
-          'UPDATE accounts SET balance = balance + $1 WHERE id = $2',
-          [balanceChange, account_id]
-        );
+      // Validate transfer specific fields
+      if (type === 'transfer') {
+        if (!account_id || !to_account_id) {
+          return res.status(400).json({ message: 'Transfer requires both from and to accounts' });
+        }
+        if (account_id === to_account_id) {
+          return res.status(400).json({ message: 'Cannot transfer to the same account' });
+        }
       }
 
-      res.status(201).json(result.rows[0]);
+      // Start transaction
+      await dbQuery('BEGIN');
+
+      try {
+        // Insert main transaction
+        const insertQuery = `
+          INSERT INTO transactions (
+            user_id, account_id, to_account_id, category_id, type, amount, date,
+            description, notes, merchant, tags, admin_fee
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          RETURNING *
+        `;
+
+        const params = [
+          userId,
+          account_id || null,
+          to_account_id || null,
+          category_id || null,
+          type,
+          amount,
+          date,
+          description || null,
+          notes || null,
+          merchant || null,
+          tags || null,
+          admin_fee || 0,
+        ];
+
+        const result = await dbQuery(insertQuery, params);
+
+        // Update account balances based on transaction type
+        if (type === 'income' && account_id) {
+          // Income: add to account
+          await dbQuery(
+            'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+            [amount, account_id, userId]
+          );
+        } else if (type === 'expense' && account_id) {
+          // Expense: subtract from account
+          await dbQuery(
+            'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+            [amount, account_id, userId]
+          );
+        } else if (type === 'transfer' && account_id && to_account_id) {
+          // Transfer: subtract from source, add to destination
+          await dbQuery(
+            'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+            [amount, account_id, userId]
+          );
+          await dbQuery(
+            'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+            [amount, to_account_id, userId]
+          );
+
+          // If admin fee > 0, create expense transaction for admin fee
+          if (admin_fee && parseFloat(admin_fee) > 0) {
+            // Get Admin Fee category
+            const adminFeeCatResult = await dbQuery(
+              `SELECT id FROM categories WHERE user_id = $1 AND name = 'Admin Fee' AND type = 'expense' LIMIT 1`,
+              [userId]
+            );
+
+            if (adminFeeCatResult.rows.length > 0) {
+              const adminFeeCategoryId = adminFeeCatResult.rows[0].id;
+
+              // Insert admin fee transaction
+              await dbQuery(
+                `INSERT INTO transactions (
+                  user_id, account_id, category_id, type, amount, date,
+                  description, notes
+                ) VALUES ($1, $2, $3, 'expense', $4, $5, $6, $7)`,
+                [
+                  userId,
+                  account_id,
+                  adminFeeCategoryId,
+                  admin_fee,
+                  date,
+                  `Admin fee for transfer to ${to_account_id}`,
+                  `Auto-generated admin fee for transfer transaction ID: ${result.rows[0].id}`
+                ]
+              );
+
+              // Subtract admin fee from source account
+              await dbQuery(
+                'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                [admin_fee, account_id, userId]
+              );
+            }
+          }
+        }
+
+        // Commit transaction
+        await dbQuery('COMMIT');
+
+        res.status(201).json(result.rows[0]);
+      } catch (error) {
+        // Rollback on error
+        await dbQuery('ROLLBACK');
+        throw error;
+      }
 
     } else if (req.method === 'PUT') {
       const { id } = req.query;
       const {
         account_id,
+        to_account_id,
         category_id,
         type,
         amount,
@@ -178,6 +260,7 @@ async function handler(
         notes,
         merchant,
         tags,
+        admin_fee,
       } = req.body;
 
       // Get old transaction for balance update
@@ -190,57 +273,133 @@ async function handler(
         return res.status(404).json({ message: 'Transaction not found' });
       }
 
-      const query = `
-        UPDATE transactions SET
-          account_id = $1,
-          category_id = $2,
-          type = $3,
-          amount = $4,
-          date = $5,
-          description = $6,
-          notes = $7,
-          merchant = $8,
-          tags = $9,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = $10 AND user_id = $11
-        RETURNING *
-      `;
-
-      const params = [
-        account_id || null,
-        category_id || null,
-        type,
-        amount,
-        date,
-        description || null,
-        notes || null,
-        merchant || null,
-        tags || null,
-        id,
-        userId,
-      ];
-
-      const result = await dbQuery(query, params);
-
-      // Update account balances
-      const oldTxnData = oldTxn.rows[0];
-      if (oldTxnData.account_id) {
-        const oldBalanceChange = oldTxnData.type === 'income' ? -oldTxnData.amount : oldTxnData.amount;
-        await dbQuery(
-          'UPDATE accounts SET balance = balance + $1 WHERE id = $2',
-          [oldBalanceChange, oldTxnData.account_id]
-        );
+      // Validate transfer specific fields
+      if (type === 'transfer') {
+        if (!account_id || !to_account_id) {
+          return res.status(400).json({ message: 'Transfer requires both from and to accounts' });
+        }
+        if (account_id === to_account_id) {
+          return res.status(400).json({ message: 'Cannot transfer to the same account' });
+        }
       }
 
-      if (account_id) {
-        const newBalanceChange = type === 'income' ? amount : -amount;
-        await dbQuery(
-          'UPDATE accounts SET balance = balance + $1 WHERE id = $2',
-          [newBalanceChange, account_id]
-        );
-      }
+      // Start transaction
+      await dbQuery('BEGIN');
 
-      res.status(200).json(result.rows[0]);
+      try {
+        const oldTxnData = oldTxn.rows[0];
+
+        // Revert old transaction effects
+        if (oldTxnData.type === 'income' && oldTxnData.account_id) {
+          await dbQuery(
+            'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+            [oldTxnData.amount, oldTxnData.account_id, userId]
+          );
+        } else if (oldTxnData.type === 'expense' && oldTxnData.account_id) {
+          await dbQuery(
+            'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+            [oldTxnData.amount, oldTxnData.account_id, userId]
+          );
+        } else if (oldTxnData.type === 'transfer') {
+          // Revert transfer
+          if (oldTxnData.account_id) {
+            await dbQuery(
+              'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+              [oldTxnData.amount, oldTxnData.account_id, userId]
+            );
+          }
+          if (oldTxnData.to_account_id) {
+            await dbQuery(
+              'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+              [oldTxnData.amount, oldTxnData.to_account_id, userId]
+            );
+          }
+          // Revert admin fee if exists
+          if (oldTxnData.admin_fee && parseFloat(oldTxnData.admin_fee) > 0 && oldTxnData.account_id) {
+            await dbQuery(
+              'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+              [oldTxnData.admin_fee, oldTxnData.account_id, userId]
+            );
+          }
+        }
+
+        // Update transaction
+        const updateQuery = `
+          UPDATE transactions SET
+            account_id = $1,
+            to_account_id = $2,
+            category_id = $3,
+            type = $4,
+            amount = $5,
+            date = $6,
+            description = $7,
+            notes = $8,
+            merchant = $9,
+            tags = $10,
+            admin_fee = $11,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = $12 AND user_id = $13
+          RETURNING *
+        `;
+
+        const params = [
+          account_id || null,
+          to_account_id || null,
+          category_id || null,
+          type,
+          amount,
+          date,
+          description || null,
+          notes || null,
+          merchant || null,
+          tags || null,
+          admin_fee || 0,
+          id,
+          userId,
+        ];
+
+        const result = await dbQuery(updateQuery, params);
+
+        // Apply new transaction effects
+        if (type === 'income' && account_id) {
+          await dbQuery(
+            'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+            [amount, account_id, userId]
+          );
+        } else if (type === 'expense' && account_id) {
+          await dbQuery(
+            'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+            [amount, account_id, userId]
+          );
+        } else if (type === 'transfer' && account_id && to_account_id) {
+          // Apply transfer
+          await dbQuery(
+            'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+            [amount, account_id, userId]
+          );
+          await dbQuery(
+            'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+            [amount, to_account_id, userId]
+          );
+
+          // Apply admin fee if exists
+          if (admin_fee && parseFloat(admin_fee) > 0) {
+            await dbQuery(
+              'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+              [admin_fee, account_id, userId]
+            );
+          }
+        }
+
+        // Commit transaction
+        await dbQuery('COMMIT');
+
+        res.status(200).json(result.rows[0]);
+      } catch (error) {
+        // Rollback on error
+        await dbQuery('ROLLBACK');
+        throw error;
+      }
 
     } else if (req.method === 'DELETE') {
       const { id } = req.query;
@@ -255,22 +414,61 @@ async function handler(
         return res.status(404).json({ message: 'Transaction not found' });
       }
 
-      await dbQuery(
-        'DELETE FROM transactions WHERE id = $1 AND user_id = $2',
-        [id, userId]
-      );
+      // Start transaction
+      await dbQuery('BEGIN');
 
-      // Update account balance
-      const txnData = txn.rows[0];
-      if (txnData.account_id) {
-        const balanceChange = txnData.type === 'income' ? -txnData.amount : txnData.amount;
+      try {
+        const txnData = txn.rows[0];
+
+        // Delete transaction
         await dbQuery(
-          'UPDATE accounts SET balance = balance + $1 WHERE id = $2',
-          [balanceChange, txnData.account_id]
+          'DELETE FROM transactions WHERE id = $1 AND user_id = $2',
+          [id, userId]
         );
-      }
 
-      res.status(200).json({ message: 'Transaction deleted' });
+        // Revert account balance changes
+        if (txnData.type === 'income' && txnData.account_id) {
+          await dbQuery(
+            'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+            [txnData.amount, txnData.account_id, userId]
+          );
+        } else if (txnData.type === 'expense' && txnData.account_id) {
+          await dbQuery(
+            'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+            [txnData.amount, txnData.account_id, userId]
+          );
+        } else if (txnData.type === 'transfer') {
+          // Revert transfer
+          if (txnData.account_id) {
+            await dbQuery(
+              'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+              [txnData.amount, txnData.account_id, userId]
+            );
+          }
+          if (txnData.to_account_id) {
+            await dbQuery(
+              'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+              [txnData.amount, txnData.to_account_id, userId]
+            );
+          }
+          // Revert admin fee if exists
+          if (txnData.admin_fee && parseFloat(txnData.admin_fee) > 0 && txnData.account_id) {
+            await dbQuery(
+              'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+              [txnData.admin_fee, txnData.account_id, userId]
+            );
+          }
+        }
+
+        // Commit transaction
+        await dbQuery('COMMIT');
+
+        res.status(200).json({ message: 'Transaction deleted' });
+      } catch (error) {
+        // Rollback on error
+        await dbQuery('ROLLBACK');
+        throw error;
+      }
 
     } else {
       res.status(405).json({ message: 'Method not allowed' });

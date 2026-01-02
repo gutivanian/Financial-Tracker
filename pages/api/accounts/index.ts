@@ -31,24 +31,52 @@ async function handler(req: AuthRequest, res: NextApiResponse) {
         return res.status(400).json({ message: 'Missing required fields' });
       }
 
-      const query = `
-        INSERT INTO accounts (
-          user_id, name, type, balance, currency, icon, color
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING *
-      `;
+      // Start transaction
+      await dbQuery('BEGIN');
 
-      const result = await dbQuery(query, [
-        userId,
-        name,
-        type,
-        balance || 0,
-        currency || 'IDR',
-        icon || null,
-        color || null,
-      ]);
+      try {
+        // Insert account
+        const accountQuery = `
+          INSERT INTO accounts (
+            user_id, name, type, balance, currency, icon, color
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          RETURNING *
+        `;
 
-      res.status(201).json(result.rows[0]);
+        const accountResult = await dbQuery(accountQuery, [
+          userId,
+          name,
+          type,
+          balance || 0,
+          currency || 'IDR',
+          icon || null,
+          color || null,
+        ]);
+
+        // Ensure Admin Fee category exists for this user
+        const adminFeeCategoryCheck = await dbQuery(
+          `SELECT id FROM categories WHERE user_id = $1 AND name = 'Admin Fee' AND type = 'expense' LIMIT 1`,
+          [userId]
+        );
+
+        if (adminFeeCategoryCheck.rows.length === 0) {
+          // Create Admin Fee category
+          await dbQuery(
+            `INSERT INTO categories (user_id, name, type, icon, color, budget_type, is_active, created_at)
+             VALUES ($1, 'Admin Fee', 'expense', 'DollarSign', '#ef4444', 'needs', true, CURRENT_TIMESTAMP)`,
+            [userId]
+          );
+        }
+
+        // Commit transaction
+        await dbQuery('COMMIT');
+
+        res.status(201).json(accountResult.rows[0]);
+      } catch (error) {
+        // Rollback on error
+        await dbQuery('ROLLBACK');
+        throw error;
+      }
 
     } else if (req.method === 'PUT') {
       const { id } = req.query;
