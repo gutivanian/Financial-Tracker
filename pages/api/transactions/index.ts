@@ -29,7 +29,24 @@ async function handler(
           c.name as category_name,
           c.icon as category_icon,
           c.color as category_color,
-          ta.name as to_account_name
+          ta.name as to_account_name,
+          CASE 
+            WHEN t.is_split_payment = true THEN
+              (
+                SELECT json_agg(
+                  json_build_object(
+                    'account_id', ts.account_id,
+                    'account_name', acc.name,
+                    'amount', ts.amount,
+                    'percentage', ts.percentage
+                  ) ORDER BY ts.id
+                )
+                FROM transaction_splits ts
+                LEFT JOIN accounts acc ON ts.account_id = acc.id
+                WHERE ts.transaction_id = t.id
+              )
+            ELSE NULL
+          END as splits
         FROM transactions t
         LEFT JOIN accounts a ON t.account_id = a.id
         LEFT JOIN categories c ON t.category_id = c.id
@@ -129,11 +146,36 @@ async function handler(
         merchant,
         tags,
         admin_fee,
+        is_split_payment,
+        splits,
       } = req.body;
 
       // Validate required fields
       if (!type || !amount || !date) {
         return res.status(400).json({ message: 'Missing required fields' });
+      }
+
+      // Validate split payment
+      if (is_split_payment) {
+        if (!splits || !Array.isArray(splits) || splits.length === 0) {
+          return res.status(400).json({ message: 'Split payment requires at least one split entry' });
+        }
+
+        // Validate total splits = transaction amount
+        const totalSplits = splits.reduce((sum: number, s: any) => sum + parseFloat(s.amount || 0), 0);
+        const txnAmount = parseFloat(amount);
+        if (Math.abs(totalSplits - txnAmount) > 0.01) {
+          return res.status(400).json({
+            message: `Split amounts total (${totalSplits}) must equal transaction amount (${txnAmount})`
+          });
+        }
+
+        // Validate all splits have account_id and amount
+        for (const split of splits) {
+          if (!split.account_id || !split.amount || parseFloat(split.amount) <= 0) {
+            return res.status(400).json({ message: 'Each split must have valid account_id and amount' });
+          }
+        }
       }
 
       // Validate transfer specific fields
@@ -154,8 +196,8 @@ async function handler(
         const insertQuery = `
           INSERT INTO transactions (
             user_id, account_id, to_account_id, category_id, type, amount, date,
-            description, notes, merchant, tags, admin_fee
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            description, notes, merchant, tags, admin_fee, is_split_payment, split_count
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
           RETURNING *
         `;
 
@@ -172,12 +214,52 @@ async function handler(
           merchant || null,
           tags || null,
           admin_fee || 0,
+          is_split_payment || false,
+          is_split_payment ? (splits?.length || 1) : 1,
         ];
 
         const result = await dbQuery(insertQuery, params);
+        const transactionId = result.rows[0].id;
 
-        // Update account balances based on transaction type
-        if (type === 'income' && account_id) {
+        // Handle split payment
+        if (is_split_payment && splits && splits.length > 0) {
+          // Insert split details
+          for (const split of splits) {
+            const splitAmount = parseFloat(split.amount);
+            const percentage = (splitAmount / parseFloat(amount)) * 100;
+
+            await dbQuery(
+              `INSERT INTO transaction_splits (transaction_id, account_id, amount, percentage)
+               VALUES ($1, $2, $3, $4)`,
+              [transactionId, split.account_id, splitAmount, percentage]
+            );
+
+            // Update each account balance
+            if (type === 'expense') {
+              await dbQuery(
+                'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                [splitAmount, split.account_id, userId]
+              );
+            } else if (type === 'income') {
+              await dbQuery(
+                'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                [splitAmount, split.account_id, userId]
+              );
+            } else if (type === 'adjustment_in') {
+              await dbQuery(
+                'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                [splitAmount, split.account_id, userId]
+              );
+            } else if (type === 'adjustment_out') {
+              await dbQuery(
+                'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                [splitAmount, split.account_id, userId]
+              );
+            }
+          }
+        }
+        // Handle regular single account transaction
+        else if (type === 'income' && account_id) {
           // Income: add to account
           await dbQuery(
             'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
@@ -613,6 +695,46 @@ async function handler(
       try {
         const txnData = txn.rows[0];
 
+        // Handle split payment deletion
+        if (txnData.is_split_payment) {
+          // Get all splits for this transaction
+          const splitsResult = await dbQuery(
+            'SELECT * FROM transaction_splits WHERE transaction_id = $1',
+            [id]
+          );
+
+          // Revert balance changes for each split
+          for (const split of splitsResult.rows) {
+            if (txnData.type === 'expense') {
+              await dbQuery(
+                'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                [split.amount, split.account_id, userId]
+              );
+            } else if (txnData.type === 'income') {
+              await dbQuery(
+                'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                [split.amount, split.account_id, userId]
+              );
+            } else if (txnData.type === 'adjustment_in') {
+              await dbQuery(
+                'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                [split.amount, split.account_id, userId]
+              );
+            } else if (txnData.type === 'adjustment_out') {
+              await dbQuery(
+                'UPDATE accounts SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
+                [split.amount, split.account_id, userId]
+              );
+            }
+          }
+
+          // Delete all splits (CASCADE should handle this, but explicit is better)
+          await dbQuery(
+            'DELETE FROM transaction_splits WHERE transaction_id = $1',
+            [id]
+          );
+        }
+
         // If this is a transfer with admin fee, find and delete the admin fee transaction
         if (txnData.type === 'transfer' && txnData.admin_fee && parseFloat(txnData.admin_fee) > 0) {
           // Get Admin Fee category
@@ -644,8 +766,9 @@ async function handler(
           [id, userId]
         );
 
-        // Revert account balance changes
-        if (txnData.type === 'income' && txnData.account_id) {
+        // Revert account balance changes for non-split payments
+        if (!txnData.is_split_payment) {
+          if (txnData.type === 'income' && txnData.account_id) {
           await dbQuery(
             'UPDATE accounts SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3',
             [txnData.amount, txnData.account_id, userId]
@@ -687,6 +810,7 @@ async function handler(
             );
           }
         }
+        }  // End of !is_split_payment check
 
         // Commit transaction
         await dbQuery('COMMIT');

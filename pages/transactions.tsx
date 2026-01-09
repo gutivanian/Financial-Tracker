@@ -5,9 +5,15 @@ import Modal from '@/components/Modal';
 import IconRenderer from '@/components/IconRenderer';
 import CategorySelect from '@/components/CategorySelect';
 import AccountSelect from '@/components/AccountSelect';
-import { Plus, Filter, Download, Search, ArrowUpRight, ArrowDownRight, Edit2, Trash2, ArrowRightLeft, RefreshCw } from 'lucide-react';
+import { Plus, Filter, Download, Search, ArrowUpRight, ArrowDownRight, Edit2, Trash2, ArrowRightLeft, RefreshCw, X } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
+
+interface PaymentSplit {
+  account_id: string;
+  amount: string;
+  percentage?: number;
+}
 
 export default function Transactions() {
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -35,7 +41,9 @@ export default function Transactions() {
     description: '',
     merchant: '',
     notes: '',
-    admin_fee: ''
+    admin_fee: '',
+    is_split_payment: false,
+    splits: [{ account_id: '', amount: '' }] as PaymentSplit[]
   });
 
   useEffect(() => {
@@ -92,6 +100,10 @@ export default function Transactions() {
       setEditingTransaction(transaction);
       setInitialAmount(transaction.amount?.toString() || '');
       setInitialAdminFee(transaction.admin_fee?.toString() || '0');
+      
+      // Handle split payment data
+      const isSplit = transaction.is_split_payment && transaction.splits && transaction.splits.length > 0;
+      
       setFormData({
         account_id: transaction.account_id?.toString() || '',
         to_account_id: transaction.to_account_id?.toString() || '',
@@ -102,7 +114,14 @@ export default function Transactions() {
         description: transaction.description || '',
         merchant: transaction.merchant || '',
         notes: transaction.notes || '',
-        admin_fee: transaction.admin_fee || ''
+        admin_fee: transaction.admin_fee || '',
+        is_split_payment: isSplit,
+        splits: isSplit 
+          ? transaction.splits.map((s: any) => ({
+              account_id: s.account_id?.toString(),
+              amount: s.amount?.toString()
+            }))
+          : [{ account_id: '', amount: '' }]
       });
     } else {
       setEditingTransaction(null);
@@ -118,7 +137,9 @@ export default function Transactions() {
         description: '',
         merchant: '',
         notes: '',
-        admin_fee: ''
+        admin_fee: '',
+        is_split_payment: false,
+        splits: [{ account_id: '', amount: '' }]
       });
     }
     setIsModalOpen(true);
@@ -129,8 +150,55 @@ export default function Transactions() {
     setEditingTransaction(null);
   };
 
+  // Split payment functions
+  const addSplit = () => {
+    setFormData({
+      ...formData,
+      splits: [...formData.splits, { account_id: '', amount: '' }]
+    });
+  };
+
+  const removeSplit = (index: number) => {
+    if (formData.splits.length > 1) {
+      setFormData({
+        ...formData,
+        splits: formData.splits.filter((_, i) => i !== index)
+      });
+    }
+  };
+
+  const updateSplit = (index: number, field: 'account_id' | 'amount', value: string) => {
+    const newSplits = [...formData.splits];
+    newSplits[index][field] = value;
+    setFormData({ ...formData, splits: newSplits });
+  };
+
+  // Calculate split totals
+  const totalSplitAmount = formData.is_split_payment
+    ? formData.splits.reduce((sum, split) => sum + (parseFloat(split.amount) || 0), 0)
+    : 0;
+  const remainingAmount = formData.is_split_payment
+    ? (parseFloat(formData.amount) || 0) - totalSplitAmount
+    : 0;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate split payment
+    if (formData.is_split_payment) {
+      if (Math.abs(remainingAmount) > 0.01) {
+        alert('Total split amounts must equal transaction amount!');
+        return;
+      }
+      
+      // Validate all splits have account and amount
+      for (const split of formData.splits) {
+        if (!split.account_id || !split.amount || parseFloat(split.amount) <= 0) {
+          alert('All payment methods must have valid account and amount!');
+          return;
+        }
+      }
+    }
     
     // Check if amount or admin fee changed when editing
     if (editingTransaction) {
@@ -165,6 +233,7 @@ export default function Transactions() {
 
       if (response && !response.error) {
         await fetchTransactions();
+        await fetchAccounts(); // Refetch accounts to update balances
         handleCloseModal();
         setIsConfirmModalOpen(false);
       } else {
@@ -184,6 +253,7 @@ export default function Transactions() {
 
       if (response && !response.error) {
         await fetchTransactions();
+        await fetchAccounts(); // Refetch accounts to update balances
       } else {
         alert(response?.message || 'Failed to delete transaction');
       }
@@ -268,7 +338,7 @@ export default function Transactions() {
           prefix: ''
         };
     }
-  };
+  }
 
   return (
     <Layout>
@@ -474,7 +544,26 @@ export default function Transactions() {
                                 <span className="text-dark-600">•</span>
                               </>
                             )}
-                            <span>{txn.account_name}</span>
+                            {/* Split Payment Indicator */}
+                            {txn.is_split_payment && txn.splits && txn.splits.length > 0 ? (
+                              <>
+                                <span className="flex items-center space-x-1 text-primary-400">
+                                  <ArrowRightLeft className="w-3 h-3" />
+                                  <span className="font-medium">{txn.splits.length} accounts</span>
+                                </span>
+                                <span className="text-dark-600">•</span>
+                                {txn.splits.map((split: any, idx: number) => (
+                                  <span key={idx}>
+                                    {split.account_name}: {formatCurrency(split.amount)}
+                                    {idx < txn.splits.length - 1 && <span className="mx-1">+</span>}
+                                  </span>
+                                ))}
+                              </>
+                            ) : (
+                              <>
+                                <span>{txn.account_name}</span>
+                              </>
+                            )}
                             {txn.merchant && (
                               <>
                                 <span className="text-dark-600">•</span>
@@ -557,7 +646,24 @@ export default function Transactions() {
                               <span>•</span>
                             </>
                           )}
-                          <span>{txn.account_name}</span>
+                          {/* Split Payment Indicator */}
+                          {txn.is_split_payment && txn.splits && txn.splits.length > 0 ? (
+                            <>
+                              <span className="flex items-center space-x-1 text-primary-400 font-medium">
+                                <ArrowRightLeft className="w-4 h-4" />
+                                <span>Split: {txn.splits.length} accounts</span>
+                              </span>
+                              <span>•</span>
+                              {txn.splits.map((split: any, idx: number) => (
+                                <span key={idx}>
+                                  {split.account_name}: {formatCurrency(split.amount)}
+                                  {idx < txn.splits.length - 1 && <span className="mx-1">+</span>}
+                                </span>
+                              ))}
+                            </>
+                          ) : (
+                            <span>{txn.account_name}</span>
+                          )}
                           {txn.merchant && (
                             <>
                               <span>•</span>
@@ -914,37 +1020,167 @@ export default function Transactions() {
             ) : (
               // Income/Expense fields
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-dark-400 mb-2">
-                      Account <span className="text-danger">*</span>
-                    </label>
-                    <AccountSelect
-                      accounts={accounts}
-                      value={formData.account_id}
-                      onChange={(accountId) => setFormData({ ...formData, account_id: accountId })}
-                      placeholder="Select Account"
-                      formatBalance={formatCurrency}
-                      required
+                {/* Split Payment Toggle */}
+                <div className="p-3 bg-dark-800 rounded-lg border border-dark-700">
+                  <label className="flex items-center space-x-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_split_payment}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        is_split_payment: e.target.checked,
+                        splits: e.target.checked ? [{ account_id: '', amount: '' }] : [{ account_id: '', amount: '' }]
+                      })}
+                      className="w-5 h-5 rounded border-dark-600 bg-dark-700 text-primary-600 focus:ring-2 focus:ring-primary-600"
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-dark-400 mb-2">
-                      Category <span className="text-danger">*</span>
-                    </label>
-                    <CategorySelect
-                      categories={getCategoriesByType(formData.type)}
-                      value={formData.category_id}
-                      onChange={(categoryId) => setFormData({ ...formData, category_id: categoryId })}
-                      placeholder="Select Category"
-                      required
-                    />
-                  </div>
+                    <div className="flex-1">
+                      <span className="text-sm font-medium text-white">Split Payment</span>
+                      <p className="text-xs text-dark-400 mt-0.5">Use multiple accounts to pay this transaction</p>
+                    </div>
+                  </label>
                 </div>
 
+                {formData.is_split_payment ? (
+                  // Split Payment Fields
+                  <div className="space-y-3 p-4 bg-primary-600/5 rounded-lg border border-primary-600/30">
+                    {/* Category Selection for Split Payment */}
+                    <div>
+                      <label className="block text-sm font-medium text-dark-400 mb-2">
+                        Category <span className="text-danger">*</span>
+                      </label>
+                      <CategorySelect
+                        categories={getCategoriesByType(formData.type)}
+                        value={formData.category_id}
+                        onChange={(categoryId) => setFormData({ ...formData, category_id: categoryId })}
+                        placeholder="Select Category"
+                        required
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-sm font-medium text-white">
+                        Payment Methods
+                      </label>
+                      <button
+                        type="button"
+                        onClick={addSplit}
+                        className="btn btn-sm bg-primary-600 hover:bg-primary-700 text-white px-3 py-1 text-xs"
+                      >
+                        <Plus className="w-3 h-3 mr-1" />
+                        Add Account
+                      </button>
+                    </div>
+
+                    {formData.splits.map((split, index) => (
+                      <div key={index} className="flex items-center gap-2 p-3 bg-dark-800 rounded border border-dark-700">
+                        <div className="flex-1">
+                          <AccountSelect
+                            accounts={accounts}
+                            value={split.account_id}
+                            onChange={(accountId) => updateSplit(index, 'account_id', accountId)}
+                            placeholder={`Account ${index + 1}`}
+                            formatBalance={formatCurrency}
+                            required
+                          />
+                        </div>
+                        <div className="w-32">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={split.amount}
+                            onChange={(e) => updateSplit(index, 'amount', e.target.value)}
+                            className="input w-full text-sm"
+                            placeholder="Amount"
+                            required
+                          />
+                        </div>
+                        {formData.splits.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeSplit(index)}
+                            className="p-2 text-danger hover:bg-danger/10 rounded transition-colors"
+                            title="Remove"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+
+                    {/* Split Summary */}
+                    <div className="p-3 bg-dark-900 rounded border border-dark-700 space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-dark-400">Total Transaction:</span>
+                        <span className="text-white font-semibold">
+                          {formatCurrency(parseFloat(formData.amount) || 0)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-dark-400">Total Splits:</span>
+                        <span className={`font-semibold ${
+                          Math.abs(remainingAmount) < 0.01 ? 'text-success' : 'text-warning'
+                        }`}>
+                          {formatCurrency(totalSplitAmount)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm pt-2 border-t border-dark-700">
+                        <span className="text-dark-400">Remaining:</span>
+                        <span className={`font-bold ${
+                          Math.abs(remainingAmount) < 0.01 
+                            ? 'text-success' 
+                            : remainingAmount > 0 
+                              ? 'text-warning' 
+                              : 'text-danger'
+                        }`}>
+                          {formatCurrency(remainingAmount)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {Math.abs(remainingAmount) > 0.01 && (
+                      <div className="p-3 bg-warning/10 border border-warning/30 rounded">
+                        <p className="text-xs text-warning flex items-center">
+                          <span className="mr-2">⚠️</span>
+                          Total splits must equal transaction amount!
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  // Single Account Fields
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-dark-400 mb-2">
+                        Account <span className="text-danger">*</span>
+                      </label>
+                      <AccountSelect
+                        accounts={accounts}
+                        value={formData.account_id}
+                        onChange={(accountId) => setFormData({ ...formData, account_id: accountId })}
+                        placeholder="Select Account"
+                        formatBalance={formatCurrency}
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-dark-400 mb-2">
+                        Category <span className="text-danger">*</span>
+                      </label>
+                      <CategorySelect
+                        categories={getCategoriesByType(formData.type)}
+                        value={formData.category_id}
+                        onChange={(categoryId) => setFormData({ ...formData, category_id: categoryId })}
+                        placeholder="Select Category"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Common fields for both split and single payment */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
                     <label className="block text-sm font-medium text-dark-400 mb-2">
                       Amount <span className="text-danger">*</span>
                     </label>
@@ -962,7 +1198,7 @@ export default function Transactions() {
                         required
                       />
                     </div>
-                  </div>
+                  
 
                   <div>
                     <label className="block text-sm font-medium text-dark-400 mb-2">
