@@ -16,7 +16,8 @@ import {
   Database,
   ChevronRight,
   Folder,
-  BarChart3
+  BarChart3,
+  Grid3x3
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -178,6 +179,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </p>
               </div>
             </div>
+
+            {/* All Apps Button */}
+            <a
+              href={`${process.env.NEXT_PUBLIC_SSO_URL || 'http://localhost:3001'}/apps`}
+              className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 mb-2
+                bg-primary-600/10 hover:bg-primary-600/20 text-primary-400 hover:text-primary-300 
+                rounded-lg transition-all duration-200 border border-primary-600/30 
+                hover:border-primary-500/50 group"
+            >
+              <Grid3x3 className="w-4 h-4 group-hover:scale-110 transition-transform" />
+              <span className="font-medium text-sm">Semua Aplikasi</span>
+            </a>
 
             {/* Logout Button */}
             <button
