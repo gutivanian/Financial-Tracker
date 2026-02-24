@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import * as jose from 'jose'
-import { sql } from '@vercel/postgres'
+import jwt from 'jsonwebtoken'
+import { query } from '../lib/db'
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET
-)
+const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-change-in-production'
 
 export async function authMiddleware(req: NextRequest) {
   const token = req.cookies.get('auth_token')?.value
@@ -16,15 +14,14 @@ export async function authMiddleware(req: NextRequest) {
 
   try {
     // 1. Verify JWT dari SSO
-    const { payload } = await jose.jwtVerify(token, JWT_SECRET)
+    const payload = jwt.verify(token, JWT_SECRET) as any
     const ssoUserId = payload.userId as string  // UUID dari SSO
 
     // 2. Lookup SERIAL id lokal berdasarkan UUID
-    const result = await sql`
-      SELECT id, email, name 
-      FROM users 
-      WHERE sso_user_id = ${ssoUserId}::uuid
-    `
+    const result = await query(
+      'SELECT id, email, name FROM users WHERE sso_user_id = $1',
+      [ssoUserId]
+    )
 
     if (result.rows.length === 0) {
       // 3. Kalau belum ada, sync dulu dari SSO
@@ -38,16 +35,12 @@ export async function authMiddleware(req: NextRequest) {
       const ssoUser = await ssoResponse.json()
 
       // Insert ke local database, dapat SERIAL id baru
-      const insertResult = await sql`
-        INSERT INTO users (sso_user_id, email, name, created_at)
-        VALUES (
-          ${ssoUser.id}::uuid,
-          ${ssoUser.email},
-          ${ssoUser.name},
-          NOW()
-        )
-        RETURNING id, email, name
-      `
+      const insertResult = await query(
+        `INSERT INTO users (sso_user_id, email, name, created_at)
+         VALUES ($1, $2, $3, NOW())
+         RETURNING id, email, name`,
+        [ssoUser.id, ssoUser.email, ssoUser.name]
+      )
       
       const localUser = insertResult.rows[0]
       
