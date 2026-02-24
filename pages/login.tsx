@@ -9,7 +9,7 @@ const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, redirectToSSO } = useAuth();
   const router = useRouter();
 
   // Redirect if already authenticated
@@ -18,6 +18,13 @@ const LoginPage: React.FC = () => {
       router.push('/');
     }
   }, [isAuthenticated, router]);
+
+  // Check for auth errors from query params
+  useEffect(() => {
+    if (router.query.error === 'auth_failed') {
+      setError('Autentikasi gagal. Silakan coba lagi.');
+    }
+  }, [router.query]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +38,10 @@ const LoginPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSSOLogin = () => {
+    redirectToSSO();
   };
 
   return (
@@ -140,6 +151,27 @@ const LoginPage: React.FC = () => {
               )}
             </button>
           </form>
+
+          {/* SSO Login Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-dark-700"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-dark-800 text-dark-400">atau</span>
+            </div>
+          </div>
+
+          {/* SSO Login Button */}
+          <button
+            type="button"
+            onClick={handleSSOLogin}
+            disabled={isLoading}
+            className="w-full py-3 px-4 border-2 border-primary-600/30 text-primary-500 rounded-xl font-semibold hover:bg-primary-600/10 hover:border-primary-600/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+          >
+            <Wallet className="w-5 h-5" />
+            <span>Login dengan SSO</span>
+          </button>
         </div>
 
         {/* Footer */}

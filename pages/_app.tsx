@@ -5,7 +5,7 @@ import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
 
 // Pages yang tidak memerlukan authentication
-const publicPages = ['/login']
+const publicPages = ['/login', '/auth/callback', '/register']
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()
