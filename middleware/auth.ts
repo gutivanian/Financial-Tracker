@@ -28,7 +28,10 @@ export async function authMiddleware(req: NextRequest) {
 
     if (result.rows.length === 0) {
       // 3. Kalau belum ada, sync dulu dari SSO
-      const ssoUrl = process.env.NEXT_PUBLIC_SSO_URL || 'http://localhost:3001'
+      const ssoUrl = process.env.NEXT_PUBLIC_SSO_URL
+      if (!ssoUrl) {
+        throw new Error('NEXT_PUBLIC_SSO_URL is not configured')
+      }
       const ssoResponse = await fetch(`${ssoUrl}/api/auth/user`, {
         headers: { Authorization: `Bearer ${token}` }
       })

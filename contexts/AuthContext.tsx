@@ -157,8 +157,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const redirectToSSO = () => {
-    const ssoUrl = process.env.NEXT_PUBLIC_SSO_URL || 'http://localhost:3001';
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3002';
+    const ssoUrl = process.env.NEXT_PUBLIC_SSO_URL;
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    
+    if (!ssoUrl || !appUrl) {
+      throw new Error('SSO URL and APP URL must be configured in environment variables');
+    }
     const callbackUrl = `${appUrl}/auth/callback`;
     
     console.log('[AuthContext] Redirecting to SSO:', ssoUrl);
